@@ -20,6 +20,8 @@ RunCoach AI là ứng dụng Android thông minh giúp thiết kế và quản l
     *   **Taper Phase (Giảm tải dưỡng sức):** Giảm quãng đường chạy để cơ thể phục hồi tối đa trước ngày đua nhưng vẫn duy trì độ nhạy cơ bắp.
 *   **Chu Kỳ Phục Hồi (Deload Weeks):** Cứ mỗi 4 tuần tập luyện, quãng đường chạy dài sẽ tự động giảm xuống còn 75% để tránh quá tải và chấn thương.
 *   **Tỷ Lệ Vàng 80/20:** Sắp xếp lịch chạy đảm bảo 80% thời lượng/quãng đường ở cường độ thấp (Easy/Long) và chỉ 20% dành cho các bài tập chất lượng cao (Tempo/Interval).
+*   **Giáo Án An Toàn & Xây Dựng Thói Quen (New):** Thiết lập cự ly 3 tuần đầu tiên siêu dễ dàng cho cấp độ `BEGINNER` để tạo thói quen và thích nghi cơ xương khớp mà không bị áp lực Pace, kết hợp hướng dẫn xen kẽ chạy/đi bộ (Run-Walk). Đồng thời áp dụng giới hạn tăng trưởng cự ly tuần (`maxStep`) cực kỳ nghiêm ngặt.
+*   **Đánh Giá Tính Khả Thi Mục Tiêu (New):** Hệ thống `PlanFeasibilityChecker` tự động phân tích thể lực thực tế (3km test) so với số tuần chuẩn bị và cự ly mục tiêu để đưa ra cảnh báo chấn thương trực quan và hướng dẫn người dùng điều chỉnh ngày đua/cự ly phù hợp.
 
 ### 2. Đồng Bộ Hóa Qua Health Connect (Google)
 *   Tích hợp trực tiếp với thư viện **Health Connect** của Android.
@@ -93,7 +95,10 @@ RunCoach AI là ứng dụng Android thông minh giúp thiết kế và quản l
 
 ## 📝 Thông Tin Phiên Bản
 
-*   **Phiên bản hiện tại:** v1.1
+*   **Phiên bản hiện tại:** v1.2
+    *   *Nâng cấp v1.2:*
+        *   **Cơ chế giáo án an toàn:** Tích hợp giới hạn tăng cự ly tuần (`maxStep`), giai đoạn 3 tuần đầu tạo thói quen cực kỳ nhẹ nhàng cho người mới bắt đầu và chỉ dẫn xen kẽ chạy/đi bộ (Run-Walk).
+        *   **Đánh giá tính khả thi:** Thêm `PlanFeasibilityChecker` đánh giá độ an toàn của mục tiêu và hiển thị hộp thoại cảnh báo Material 3 trên `TestRunScreen`, cho phép người dùng quay lại Onboarding để điều chỉnh mục tiêu hoặc chọn tiếp tục.
     *   *Nâng cấp v1.1:* Tối ưu hóa giao diện Scaffold triệt tiêu khoảng trắng thừa ở chân trang, cải tiến Widget chống crash trên các dòng máy cao cấp (Samsung S23 Ultra - Android 14), và sửa đổi hiển thị phiên bản ở chân màn hình Onboarding và Dashboard.
 
 ---
