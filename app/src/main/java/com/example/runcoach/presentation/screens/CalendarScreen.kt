@@ -62,7 +62,6 @@ fun CalendarScreen(
             .fillMaxSize()
             .background(bgBrush)
             .statusBarsPadding()
-            .navigationBarsPadding()
             .verticalScroll(rememberScrollState())
     ) {
         // Top bar
@@ -183,7 +182,7 @@ fun CalendarScreen(
                         Box(
                             modifier = Modifier
                                 .weight(1f)
-                                .aspectRatio(0.85f)
+                                .heightIn(min = 72.dp)
                                 .padding(2.dp)
                                 .clip(RoundedCornerShape(10.dp))
                                 .background(
@@ -223,10 +222,11 @@ fun CalendarScreen(
                                         CalendarDayDot(workout = workout)
                                         Text(
                                             text = workoutTypeShort(workout),
-                                            fontSize = 8.sp,
+                                            fontSize = 9.sp,
                                             color = workoutTypeColor(workout).copy(alpha = 0.9f),
                                             fontWeight = FontWeight.SemiBold,
-                                            maxLines = 1
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                                         )
                                     }
                                 }
@@ -405,9 +405,8 @@ fun workoutTypeColor(workout: WorkoutEntity): Color {
         workout.isSkipped -> ColorSkipped
         workout.type == "LONG" -> ColorLong
         workout.type == "EASY" -> ColorEasy
-        workout.type == "TEMPO" -> ColorTempo
-        workout.type == "RECOVERY" -> ColorRecovery
-        workout.type == "CT" -> ColorRecovery
+        workout.type == "TEMPO" || workout.type == "INTERVAL" -> ColorTempo
+        workout.type == "RECOVERY" || workout.type == "CT" -> ColorRecovery
         workout.type == "RACE" -> ColorRace
         else -> ColorRest
     }
@@ -417,7 +416,7 @@ fun workoutTypeIcon(workout: WorkoutEntity): ImageVector {
     return when (workout.type) {
         "LONG" -> Icons.Default.DirectionsRun
         "EASY" -> Icons.Default.DirectionsRun
-        "TEMPO" -> Icons.Default.Speed
+        "TEMPO", "INTERVAL" -> Icons.Default.Speed
         "RECOVERY" -> Icons.Default.SelfImprovement
         "CT" -> Icons.Default.Pool
         "RACE" -> Icons.Default.EmojiEvents
@@ -432,10 +431,11 @@ fun workoutTypeShort(workout: WorkoutEntity): String {
         "LONG" -> "LONG"
         "EASY" -> "EASY"
         "TEMPO" -> "TEMPO"
+        "INTERVAL" -> "INTV"
         "RECOVERY" -> "RCV"
         "CT" -> "CT"
         "RACE" -> "RACE"
         "REST" -> "REST"
-        else -> workout.type
+        else -> workout.type.take(4).uppercase()
     }
 }

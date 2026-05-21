@@ -104,11 +104,11 @@ fun HistoryScreen(
             )
         },
         containerColor = Color.Transparent,
+        contentWindowInsets = WindowInsets(0.dp),
         modifier = Modifier
             .fillMaxSize()
             .background(bgBrush)
             .statusBarsPadding()
-            .navigationBarsPadding()
     ) { innerPadding ->
         Column(
             modifier = Modifier

@@ -62,7 +62,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:text="ngày đến ngày đua"
-                android:textColor="?android:attr/textColorPrimary"
+                android:textColor="@color/widget_text_primary"
                 android:textSize="13sp"
                 android:textStyle="bold" />
 
@@ -104,7 +104,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Đang tải dữ liệu..."
-            android:textColor="?android:attr/textColorPrimary"
+            android:textColor="@color/widget_text_primary"
             android:textSize="14sp"
             android:textStyle="bold"/>
 
@@ -113,7 +113,7 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="--"
-            android:textColor="?android:attr/textColorSecondary"
+            android:textColor="@color/widget_text_secondary"
             android:textSize="12sp"
             android:maxLines="2"
             android:ellipsize="end"

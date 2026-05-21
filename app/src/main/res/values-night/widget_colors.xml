@@ -1,5 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <color name="widget_bg_color">#F2121212</color> <!-- 95% Dark -->
-    <color name="widget_stroke_color">#1AFFFFFF</color> <!-- Light grey stroke -->
+    <color name="widget_stroke_color">#33FFFFFF</color> <!-- Light grey border -->
+    <color name="widget_text_primary">#FFFFFF</color> <!-- White text for dark background -->
+    <color name="widget_text_secondary">#A0A0A5</color> <!-- Grey text -->
 </resources>

@@ -44,6 +44,9 @@ class RaceCountdownWidget : AppWidgetProvider() {
                 for (appWidgetId in appWidgetIds) {
                     updateWidget(context, appWidgetManager, appWidgetId, raceDateStr, targetDist, todayWorkout)
                 }
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("RaceCountdownWidget: Exception during update", e)
+                e.printStackTrace()
             } finally {
                 pendingResult.finish()
             }
@@ -52,8 +55,9 @@ class RaceCountdownWidget : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        // Handle direct updates if triggered manually or via other components
-        if (intent.action == AppWidgetManager.ACTION_APPWIDGET_UPDATE) {
+        // Handle manual refresh
+        if (intent.action == "com.example.runcoach.ACTION_REFRESH_WIDGET") {
+            com.example.runcoach.utils.AppLogger.d("RaceCountdownWidget: Manual refresh intent received")
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, RaceCountdownWidget::class.java)
             val ids = appWidgetManager.getAppWidgetIds(component)
@@ -136,7 +140,7 @@ class RaceCountdownWidget : AppWidgetProvider() {
 
         // PendingIntent for refresh button
         val refreshIntent = Intent(context, RaceCountdownWidget::class.java).apply {
-            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+            action = "com.example.runcoach.ACTION_REFRESH_WIDGET"
         }
         val refreshPendingIntent = PendingIntent.getBroadcast(
             context,

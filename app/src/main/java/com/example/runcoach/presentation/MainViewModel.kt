@@ -187,12 +187,14 @@ class MainViewModel(
     }
 
     fun syncTodayWorkout(onResult: (String) -> Unit) {
+        com.example.runcoach.utils.AppLogger.d("Starting syncTodayWorkout for today's specific data")
         viewModelScope.launch {
             try {
                 val app = getApplication<RunCoachApplication>()
                 val healthConnectManager = com.example.runcoach.data.health.HealthConnectManager(app)
                 
                 if (!healthConnectManager.hasPermissions()) {
+                    com.example.runcoach.utils.AppLogger.w("syncTodayWorkout aborted: Health Connect permissions are missing")
                     onResult("Chưa cấp quyền Health Connect.")
                     return@launch
                 }
@@ -201,11 +203,13 @@ class MainViewModel(
                 val workout = workoutDao.getWorkoutByDate(todayDateStr)
 
                 if (workout == null || workout.type in listOf("REST", "CT")) {
+                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: No running workout found for today ($todayDateStr)")
                     onResult("Hôm nay không có bài tập chạy cần đồng bộ.")
                     return@launch
                 }
                 
                 if (workout.isCompleted) {
+                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: Workout already completed. Skipping update.")
                     onResult("Bài tập hôm nay đã được hoàn thành trước đó.")
                     // Still can sync to update data if needed, but keeping it simple
                     return@launch
@@ -217,8 +221,10 @@ class MainViewModel(
                 val endInstant = java.time.ZonedDateTime.of(today.plusDays(1).atStartOfDay(), zoneId).toInstant()
 
                 val sessions = healthConnectManager.getRunningSessions(startInstant, endInstant)
+                com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: Fetched ${sessions.size} running sessions from Health Connect")
                 
                 if (sessions.isEmpty()) {
+                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: No sessions found")
                     onResult("Không tìm thấy dữ liệu chạy bộ của hôm nay trên Health Connect.")
                     return@launch
                 }
@@ -227,6 +233,7 @@ class MainViewModel(
                 val totalDuration = sessions.sumOf { it.durationMinutes }
 
                 if (totalDistance >= 0.1) { // lowered threshold to 100m for better UX testing
+                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: Success! Synced ${totalDistance}km")
                     val updatedWorkout = workout.copy(
                         isCompleted = true,
                         actualDistanceKm = totalDistance,
@@ -237,10 +244,12 @@ class MainViewModel(
                     workoutDao.update(updatedWorkout)
                     onResult("Đã đồng bộ thành công! ($totalDistance km)")
                 } else {
+                    com.example.runcoach.utils.AppLogger.w("syncTodayWorkout: Found data but distance too short ($totalDistance km)")
                     onResult("Tìm thấy dữ liệu nhưng quãng đường quá ngắn (<0.1km).")
                 }
 
             } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("syncTodayWorkout crashed", e)
                 e.printStackTrace()
                 onResult("Đã xảy ra lỗi khi đồng bộ: ${e.message}")
             }

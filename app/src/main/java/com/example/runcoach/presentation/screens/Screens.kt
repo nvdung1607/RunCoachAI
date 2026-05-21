@@ -83,9 +83,7 @@ fun OnboardingScreen(
             .fillMaxSize()
             .background(bgBrush)
             .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 24.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -93,6 +91,7 @@ fun OnboardingScreen(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
+            Spacer(modifier = Modifier.height(40.dp))
             // Logo
             val logoResId = if (isDark) com.example.runcoach.R.drawable.app_logo_dark else com.example.runcoach.R.drawable.app_logo_light
             Image(
@@ -396,9 +395,7 @@ fun TestRunScreen(
             .fillMaxSize()
             .background(bgBrush)
             .statusBarsPadding()
-            .navigationBarsPadding()
-            .padding(24.dp),
-        contentAlignment = Alignment.Center
+            .padding(horizontal = 24.dp)
     ) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -406,6 +403,7 @@ fun TestRunScreen(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
+            Spacer(modifier = Modifier.height(40.dp))
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -625,8 +623,7 @@ fun DashboardScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .statusBarsPadding()
-            .navigationBarsPadding(),
+            .statusBarsPadding(),
         contentPadding = PaddingValues(20.dp),
         verticalArrangement = Arrangement.spacedBy(20.dp)
     ) {
@@ -1446,6 +1443,21 @@ fun DashboardScreen(
 
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
+                        "VDOT là gì?",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "VDOT viết tắt của V̇O₂max (Volume of Oxygen Maximum - Tốc độ tiêu thụ oxy tối đa). Đây là hệ thống đánh giá thể lực do HLV huyền thoại Jack Daniels phát triển. Nó hoạt động như một hệ thống điểm số chung: VDOT càng cao, khả năng chạy bộ của bạn càng xuất sắc. Ứng dụng dùng VDOT của bạn để tự động tạo ra giáo án phù hợp nhất.",
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
                         "Giáo án này được AI thiết kế theo chuẩn Jack Daniels' Running Formula, tự động chia thành 4 giai đoạn huấn luyện (Base, Build, Peak, Taper) dựa trên số ngày còn lại. Cấu trúc này giúp bạn xây dựng nền tảng vững chắc và đạt điểm rơi phong độ (Peak) tốt nhất vào đúng ngày đua.",
                         fontSize = 14.sp,
                         lineHeight = 22.sp,
@@ -1500,21 +1512,6 @@ fun DashboardScreen(
                         }
                     }
 
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        "VDOT là gì?",
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.secondary
-                    )
-                    Spacer(modifier = Modifier.height(4.dp))
-                    Text(
-                        "VDOT (tốc độ tiêu thụ oxy tối đa) là hệ thống đánh giá thể lực do HLV huyền thoại Jack Daniels phát triển. Nó hoạt động như một hệ thống điểm số chung: VDOT càng cao, khả năng chạy bộ của bạn càng xuất sắc. Ứng dụng dùng VDOT để tự động nội suy ra tốc độ (Pace) tập luyện và dự đoán thời gian thi đấu của bạn.",
-                        fontSize = 14.sp,
-                        lineHeight = 22.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                    )
-                    
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
                         "Dự đoán thành tích được tính toán bằng cách kết hợp sức mạnh cốt lõi (chỉ số VDOT) và sự chăm chỉ của bạn (Tỷ lệ hoàn thành bài tập).\n\nThuật toán cho thấy với phong độ hiện tại, bạn có thể hoàn thành ${userPrefs.targetDistance}km trong thời gian ${VdotCalculator.formatDuration(predictedSeconds)} (Pace trung bình ${VdotCalculator.formatPace((predictedSeconds / userPrefs.targetDistance).toInt())}).\n\n💡 Lời khuyên: Hãy bám sát giáo án và không bỏ lỡ các bài tập Long Run cuối tuần để nâng cao tỷ lệ tuân thủ, từ đó rút ngắn thời gian dự đoán!",
@@ -2096,7 +2093,8 @@ fun PlanScreen(
                 )
             )
         },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0.dp)
     ) { innerPadding ->
         LazyColumn(
             modifier = Modifier.fillMaxSize().padding(innerPadding),
