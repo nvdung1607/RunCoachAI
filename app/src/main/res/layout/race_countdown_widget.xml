@@ -1,16 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
-<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:padding="8dp"
+    android:orientation="vertical"
+    android:padding="12dp"
     android:background="@drawable/widget_background">
 
-    <LinearLayout
+    <!-- Header: Title and Refresh -->
+    <RelativeLayout
         android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:orientation="vertical"
-        android:gravity="center"
-        android:padding="10dp">
+        android:layout_height="wrap_content"
+        android:layout_marginBottom="8dp">
 
         <TextView
             android:id="@+id/widget_title"
@@ -18,9 +18,29 @@
             android:layout_height="wrap_content"
             android:text="RunCoach AI"
             android:textColor="#8E8E93"
-            android:textSize="11sp"
+            android:textSize="12sp"
             android:textStyle="bold"
-            android:layout_marginBottom="2dp"/>
+            android:layout_centerVertical="true"/>
+
+        <ImageView
+            android:id="@+id/widget_refresh"
+            android:layout_width="20dp"
+            android:layout_height="20dp"
+            android:layout_alignParentEnd="true"
+            android:layout_centerVertical="true"
+            android:src="@android:drawable/ic_popup_sync"
+            android:contentDescription="Refresh"
+            android:tint="#8E8E93" />
+    </RelativeLayout>
+
+    <!-- Race Countdown Section -->
+    <LinearLayout
+        android:id="@+id/widget_countdown_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical"
+        android:layout_marginBottom="12dp">
 
         <TextView
             android:id="@+id/widget_days_count"
@@ -28,27 +48,76 @@
             android:layout_height="wrap_content"
             android:text="--"
             android:textColor="#A3E635"
-            android:textSize="32sp"
+            android:textSize="36sp"
+            android:textStyle="bold"
+            android:layout_marginEnd="8dp"/>
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical">
+            
+            <TextView
+                android:id="@+id/widget_days_label"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="ngày đến ngày đua"
+                android:textColor="?android:attr/textColorPrimary"
+                android:textSize="13sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/widget_target"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Mục tiêu: --km"
+                android:textColor="#818CF8"
+                android:textSize="12sp"
+                android:layout_marginTop="2dp"/>
+        </LinearLayout>
+    </LinearLayout>
+
+    <View
+        android:layout_width="match_parent"
+        android:layout_height="1dp"
+        android:background="#338E8E93"
+        android:layout_marginBottom="8dp"/>
+
+    <!-- Today's Workout Section -->
+    <LinearLayout
+        android:id="@+id/widget_workout_container"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Bài tập hôm nay"
+            android:textColor="#8E8E93"
+            android:textSize="11sp"
+            android:textStyle="bold"
+            android:layout_marginBottom="4dp"/>
+
+        <TextView
+            android:id="@+id/widget_workout_title"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Đang tải dữ liệu..."
+            android:textColor="?android:attr/textColorPrimary"
+            android:textSize="14sp"
             android:textStyle="bold"/>
 
         <TextView
-            android:id="@+id/widget_days_label"
-            android:layout_width="wrap_content"
+            android:id="@+id/widget_workout_desc"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="ngày đến ngày đua"
-            android:textColor="#F3F4F6"
+            android:text="--"
+            android:textColor="?android:attr/textColorSecondary"
             android:textSize="12sp"
-            android:textStyle="bold"
+            android:maxLines="2"
+            android:ellipsize="end"
             android:layout_marginTop="2dp"/>
-
-        <TextView
-            android:id="@+id/widget_target"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:text="Mục tiêu: --km"
-            android:textColor="#818CF8"
-            android:textSize="11sp"
-            android:layout_marginTop="2dp"/>
-
     </LinearLayout>
-</RelativeLayout>
+
+</LinearLayout>

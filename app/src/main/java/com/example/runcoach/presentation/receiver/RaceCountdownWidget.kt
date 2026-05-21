@@ -10,6 +10,8 @@ import android.widget.RemoteViews
 import com.example.runcoach.MainActivity
 import com.example.runcoach.R
 import com.example.runcoach.data.local.preferences.UserPreferencesRepository
+import com.example.runcoach.RunCoachApplication
+import com.example.runcoach.data.local.db.WorkoutEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
@@ -25,14 +27,25 @@ class RaceCountdownWidget : AppWidgetProvider() {
         appWidgetIds: IntArray
     ) {
         val repository = UserPreferencesRepository(context.applicationContext)
+        val app = context.applicationContext as? RunCoachApplication
+        val workoutDao = app?.database?.workoutDao()
+        
+        val pendingResult = goAsync()
 
         CoroutineScope(Dispatchers.IO).launch {
-            val prefs = repository.userPreferencesFlow.first()
-            val raceDateStr = prefs.raceDate
-            val targetDist = prefs.targetDistance
+            try {
+                val prefs = repository.userPreferencesFlow.first()
+                val raceDateStr = prefs.raceDate
+                val targetDist = prefs.targetDistance
+                
+                val todayDateStr = LocalDate.now().toString()
+                val todayWorkout = workoutDao?.getWorkoutByDate(todayDateStr)
 
-            for (appWidgetId in appWidgetIds) {
-                updateWidget(context, appWidgetManager, appWidgetId, raceDateStr, targetDist)
+                for (appWidgetId in appWidgetIds) {
+                    updateWidget(context, appWidgetManager, appWidgetId, raceDateStr, targetDist, todayWorkout)
+                }
+            } finally {
+                pendingResult.finish()
             }
         }
     }
@@ -53,7 +66,8 @@ class RaceCountdownWidget : AppWidgetProvider() {
         appWidgetManager: AppWidgetManager,
         appWidgetId: Int,
         raceDateStr: String,
-        targetDistance: Int
+        targetDistance: Int,
+        todayWorkout: WorkoutEntity?
     ) {
         val views = RemoteViews(context.packageName, R.layout.race_countdown_widget)
 
@@ -61,6 +75,8 @@ class RaceCountdownWidget : AppWidgetProvider() {
             views.setTextViewText(R.id.widget_days_count, "--")
             views.setTextViewText(R.id.widget_days_label, "Chưa cài đặt giáo án")
             views.setTextViewText(R.id.widget_target, "Nhấp để thiết lập")
+            views.setTextViewText(R.id.widget_workout_title, "Chưa có giáo án")
+            views.setTextViewText(R.id.widget_workout_desc, "Vào app để thiết lập mục tiêu và tạo giáo án.")
         } else {
             try {
                 val today = LocalDate.now()
@@ -76,6 +92,27 @@ class RaceCountdownWidget : AppWidgetProvider() {
                     views.setTextViewText(R.id.widget_days_label, "ngày còn lại")
                     views.setTextViewText(R.id.widget_target, "Mục tiêu: ${targetDistance}km")
                 }
+                
+                // Update Today's Workout
+                if (todayWorkout != null) {
+                    if (todayWorkout.type in listOf("REST", "CT")) {
+                        views.setTextViewText(R.id.widget_workout_title, "Ngày nghỉ (Rest)")
+                        views.setTextViewText(R.id.widget_workout_desc, "Hôm nay không có lịch chạy, hãy để cơ bắp phục hồi.")
+                    } else {
+                        views.setTextViewText(R.id.widget_workout_title, "🏃 ${todayWorkout.type} - ${todayWorkout.description}")
+                        if (todayWorkout.isCompleted) {
+                            views.setTextViewText(R.id.widget_workout_desc, "✅ Đã hoàn thành: ${todayWorkout.actualDistanceKm}km")
+                        } else if (todayWorkout.isSkipped) {
+                            views.setTextViewText(R.id.widget_workout_desc, "⏩ Đã dời lịch tập")
+                        } else {
+                            views.setTextViewText(R.id.widget_workout_desc, "Mục tiêu: ${todayWorkout.targetDistanceKm}km\n${todayWorkout.instructions}")
+                        }
+                    }
+                } else {
+                    views.setTextViewText(R.id.widget_workout_title, "Chưa có bài tập")
+                    views.setTextViewText(R.id.widget_workout_desc, "Vui lòng làm mới hoặc vào app để kiểm tra.")
+                }
+                
             } catch (e: Exception) {
                 views.setTextViewText(R.id.widget_days_count, "Error")
                 views.setTextViewText(R.id.widget_days_label, "Sai định dạng ngày")
@@ -95,6 +132,19 @@ class RaceCountdownWidget : AppWidgetProvider() {
         views.setOnClickPendingIntent(R.id.widget_days_count, pendingIntent)
         views.setOnClickPendingIntent(R.id.widget_days_label, pendingIntent)
         views.setOnClickPendingIntent(R.id.widget_target, pendingIntent)
+        views.setOnClickPendingIntent(R.id.widget_workout_container, pendingIntent)
+
+        // PendingIntent for refresh button
+        val refreshIntent = Intent(context, RaceCountdownWidget::class.java).apply {
+            action = AppWidgetManager.ACTION_APPWIDGET_UPDATE
+        }
+        val refreshPendingIntent = PendingIntent.getBroadcast(
+            context,
+            1,
+            refreshIntent,
+            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
+        )
+        views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent)
 
         appWidgetManager.updateAppWidget(appWidgetId, views)
     }

@@ -23,6 +23,22 @@ import com.example.runcoach.data.health.HealthConnectManager
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.Icon
+import androidx.compose.material3.Text
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Dashboard
+import androidx.compose.material.icons.filled.History
+import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.List
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.rememberNavController
 import com.example.runcoach.presentation.MainViewModel
 import com.example.runcoach.presentation.MainViewModelFactory
 import com.example.runcoach.presentation.screens.CalendarScreen
@@ -110,9 +126,68 @@ class MainActivity : ComponentActivity() {
                         else -> "dashboard"
                     }
 
-                    NavHost(
-                        navController = navController,
-                        startDestination = startDestination,
+                    val navBackStackEntry by navController.currentBackStackEntryAsState()
+                    val currentRoute = navBackStackEntry?.destination?.route
+                    val bottomNavRoutes = listOf("dashboard", "calendar", "history", "plan")
+
+                    Scaffold(
+                        bottomBar = {
+                            if (currentRoute in bottomNavRoutes) {
+                                NavigationBar(
+                                    containerColor = MaterialTheme.colorScheme.surface,
+                                ) {
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.Home, contentDescription = "Trang chủ") },
+                                        label = { Text("Trang chủ") },
+                                        selected = currentRoute == "dashboard",
+                                        onClick = {
+                                            navController.navigate("dashboard") {
+                                                popUpTo("dashboard") { inclusive = false }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    )
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.List, contentDescription = "Giáo án") },
+                                        label = { Text("Giáo án") },
+                                        selected = currentRoute == "plan",
+                                        onClick = {
+                                            navController.navigate("plan") {
+                                                popUpTo("dashboard") { inclusive = false }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    )
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.History, contentDescription = "Lịch sử") },
+                                        label = { Text("Lịch sử") },
+                                        selected = currentRoute == "history",
+                                        onClick = {
+                                            navController.navigate("history") {
+                                                popUpTo("dashboard") { inclusive = false }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    )
+                                    NavigationBarItem(
+                                        icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "Lịch tháng") },
+                                        label = { Text("Lịch tháng") },
+                                        selected = currentRoute == "calendar",
+                                        onClick = {
+                                            navController.navigate("calendar") {
+                                                popUpTo("dashboard") { inclusive = false }
+                                                launchSingleTop = true
+                                            }
+                                        }
+                                    )
+                                }
+                            }
+                        }
+                    ) { innerPadding ->
+                        NavHost(
+                            modifier = Modifier.padding(innerPadding),
+                            navController = navController,
+                            startDestination = startDestination,
                         enterTransition = {
                             slideInHorizontally(
                                 initialOffsetX = { it },
@@ -213,6 +288,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+            }
             }
         }
     }

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="widget_bg_color">#F2121212</color> <!-- 95% Dark -->
+    <color name="widget_stroke_color">#1AFFFFFF</color> <!-- Light grey stroke -->
+</resources>

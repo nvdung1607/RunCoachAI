@@ -7,6 +7,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.example.runcoach.RunCoachApplication
 import com.example.runcoach.data.local.db.WorkoutDao
 import com.example.runcoach.data.local.db.WorkoutEntity
 import com.example.runcoach.data.local.preferences.UserPreferences
@@ -183,6 +184,67 @@ class MainViewModel(
         com.example.runcoach.utils.AppLogger.d("Manual Health Connect sync triggered by user")
         val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
         WorkManager.getInstance(getApplication()).enqueue(syncRequest)
+    }
+
+    fun syncTodayWorkout(onResult: (String) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val app = getApplication<RunCoachApplication>()
+                val healthConnectManager = com.example.runcoach.data.health.HealthConnectManager(app)
+                
+                if (!healthConnectManager.hasPermissions()) {
+                    onResult("Chưa cấp quyền Health Connect.")
+                    return@launch
+                }
+
+                val todayDateStr = java.time.LocalDate.now().toString()
+                val workout = workoutDao.getWorkoutByDate(todayDateStr)
+
+                if (workout == null || workout.type in listOf("REST", "CT")) {
+                    onResult("Hôm nay không có bài tập chạy cần đồng bộ.")
+                    return@launch
+                }
+                
+                if (workout.isCompleted) {
+                    onResult("Bài tập hôm nay đã được hoàn thành trước đó.")
+                    // Still can sync to update data if needed, but keeping it simple
+                    return@launch
+                }
+
+                val zoneId = java.time.ZoneId.systemDefault()
+                val today = java.time.LocalDate.now()
+                val startInstant = java.time.ZonedDateTime.of(today.atStartOfDay(), zoneId).toInstant()
+                val endInstant = java.time.ZonedDateTime.of(today.plusDays(1).atStartOfDay(), zoneId).toInstant()
+
+                val sessions = healthConnectManager.getRunningSessions(startInstant, endInstant)
+                
+                if (sessions.isEmpty()) {
+                    onResult("Không tìm thấy dữ liệu chạy bộ của hôm nay trên Health Connect.")
+                    return@launch
+                }
+
+                val totalDistance = sessions.sumOf { it.distanceKm }
+                val totalDuration = sessions.sumOf { it.durationMinutes }
+
+                if (totalDistance >= 0.1) { // lowered threshold to 100m for better UX testing
+                    val updatedWorkout = workout.copy(
+                        isCompleted = true,
+                        actualDistanceKm = totalDistance,
+                        actualDurationMin = totalDuration,
+                        completedDate = sessions.first().startTime.toString(),
+                        syncSource = "HEALTH_CONNECT"
+                    )
+                    workoutDao.update(updatedWorkout)
+                    onResult("Đã đồng bộ thành công! ($totalDistance km)")
+                } else {
+                    onResult("Tìm thấy dữ liệu nhưng quãng đường quá ngắn (<0.1km).")
+                }
+
+            } catch (e: Exception) {
+                e.printStackTrace()
+                onResult("Đã xảy ra lỗi khi đồng bộ: ${e.message}")
+            }
+        }
     }
 
     fun resetApp(onComplete: () -> Unit = {}) {

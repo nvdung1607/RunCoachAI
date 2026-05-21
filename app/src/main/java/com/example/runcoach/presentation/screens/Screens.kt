@@ -579,6 +579,12 @@ fun DashboardScreen(
     var showResetConfirm by remember { mutableStateOf(false) }
     var showNotifSettings by remember { mutableStateOf(false) }
     var showWorkoutDetails by remember { mutableStateOf<WorkoutEntity?>(null) }
+    
+    // Dialog states for informational popups
+    var showRaceDayInfo by remember { mutableStateOf(false) }
+    var showPredictionInfo by remember { mutableStateOf(false) }
+    var showPaceZonesInfo by remember { mutableStateOf(false) }
+    var showVolumeInfo by remember { mutableStateOf(false) }
 
     val context = LocalContext.current
 
@@ -706,7 +712,9 @@ fun DashboardScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showRaceDayInfo = true }
             ) {
                 Row(
                     modifier = Modifier.fillMaxWidth().padding(20.dp),
@@ -763,7 +771,9 @@ fun DashboardScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPredictionInfo = true }
             ) {
                 Column(modifier = Modifier.padding(16.dp)) {
                     Text("🔮 Dự đoán thành tích Race Day", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
@@ -819,7 +829,9 @@ fun DashboardScreen(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 shape = RoundedCornerShape(20.dp),
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPaceZonesInfo = true }
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
                     Text("Vùng Pace cá nhân hóa", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
@@ -944,8 +956,10 @@ fun DashboardScreen(
                                 }
                                 OutlinedButton(
                                     onClick = {
-                                        viewModel.triggerSync()
-                                        Toast.makeText(context, "Đang đồng bộ từ Health Connect...", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(context, "Đang kiểm tra dữ liệu Health Connect...", Toast.LENGTH_SHORT).show()
+                                        viewModel.syncTodayWorkout { msg ->
+                                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                        }
                                     },
                                     shape = RoundedCornerShape(12.dp),
                                     modifier = Modifier.weight(1f)
@@ -971,53 +985,13 @@ fun DashboardScreen(
             }
         }
 
-        // Weekly Volume Chart
         item {
-            WeeklyVolumeChart(workoutsList = workoutsList)
-        }
-
-        // Navigation buttons
-        item {
-            Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                OutlinedButton(
-                    onClick = onNavigateToPlan,
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Giáo Án", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-                }
-                
-                OutlinedButton(
-                    onClick = onNavigateToHistory,
-                    shape = RoundedCornerShape(14.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.4f)),
-                    colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    Icon(Icons.Default.History, contentDescription = null, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Lịch Sử", fontSize = 12.5.sp, fontWeight = FontWeight.SemiBold)
-                }
-
-                Button(
-                    onClick = onNavigateToCalendar,
-                    shape = RoundedCornerShape(14.dp),
-                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                    modifier = Modifier.weight(1f).height(50.dp),
-                    contentPadding = PaddingValues(horizontal = 4.dp)
-                ) {
-                    Icon(Icons.Default.CalendarMonth, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(16.dp))
-                    Spacer(modifier = Modifier.width(4.dp))
-                    Text("Lịch Tháng", fontSize = 12.5.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimary)
-                }
+            Box(modifier = Modifier.clickable { showVolumeInfo = true }) {
+                WeeklyVolumeChart(workoutsList = workoutsList)
             }
         }
+
+
     }
 
     // Log workout dialog
@@ -1432,6 +1406,255 @@ fun DashboardScreen(
             workout = showWorkoutDetails!!,
             onDismiss = { showWorkoutDetails = null }
         )
+    }
+
+    // Informational Popups
+    if (showRaceDayInfo) {
+        val totalWorkouts = workoutsList.count { it.type != "REST" && it.type != "CT" }
+        val totalDistance = workoutsList.sumOf { it.targetDistanceKm.toDouble() }
+        val weeksCount = if (workoutsList.isNotEmpty()) workoutsList.size / 7 else 0
+
+        Dialog(
+            onDismissRequest = { showRaceDayInfo = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth(0.92f).padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(
+                    modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())
+                ) {
+                    Text("🏁 Mục tiêu Race Day", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.4f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Tổng quan giáo án của bạn:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Text("• Ngày đua: ${userPrefs.raceDate}", fontSize = 14.sp)
+                            Text("• Cự ly mục tiêu: ${userPrefs.targetDistance} km", fontSize = 14.sp)
+                            Text("• Tổng thời lượng: $weeksCount tuần", fontSize = 14.sp)
+                            Text("• Số buổi chạy: $totalWorkouts buổi", fontSize = 14.sp)
+                            Text("• Tổng quãng đường dự kiến: ${String.format(java.util.Locale.US, "%.1f", totalDistance)} km", fontSize = 14.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Giáo án này được AI thiết kế theo chuẩn Jack Daniels' Running Formula, tự động chia thành 4 giai đoạn huấn luyện (Base, Build, Peak, Taper) dựa trên số ngày còn lại. Cấu trúc này giúp bạn xây dựng nền tảng vững chắc và đạt điểm rơi phong độ (Peak) tốt nhất vào đúng ngày đua.",
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = { showRaceDayInfo = false }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                        Text("Đóng", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPredictionInfo) {
+        val adherence = remember(workoutsList) {
+            val pastWorkouts = workoutsList.filter {
+                try { LocalDate.parse(it.date).isBefore(LocalDate.now()) } catch(e: Exception) { false }
+            }
+            if (pastWorkouts.isEmpty()) 1.0 else {
+                val completed = pastWorkouts.count { it.isCompleted }.toDouble()
+                val running = pastWorkouts.count { it.type !in listOf("REST") }.toDouble()
+                if (running > 0) completed / running else 1.0
+            }
+        }
+        val vdotEff = userPrefs.vdotScore.toDouble() * (0.7 + 0.3 * adherence)
+        val predictedSeconds = VdotCalculator.predictRaceTime(vdotEff, userPrefs.targetDistance.toDouble())
+
+        Dialog(
+            onDismissRequest = { showPredictionInfo = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth(0.92f).padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
+                    Text("🔮 Dự đoán thành tích", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.2f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Chỉ số hiện tại của bạn:", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Text("• VDOT Gốc (Từ bài test): ${String.format(java.util.Locale.US, "%.1f", userPrefs.vdotScore)}", fontSize = 14.sp)
+                            Text("• Tỷ lệ tuân thủ giáo án: ${(adherence * 100).toInt()}%", fontSize = 14.sp)
+                            Text("• VDOT Thực tế (Đã hiệu chỉnh): ${String.format(java.util.Locale.US, "%.1f", vdotEff)}", fontSize = 14.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "VDOT là gì?",
+                        fontSize = 15.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.secondary
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "VDOT (tốc độ tiêu thụ oxy tối đa) là hệ thống đánh giá thể lực do HLV huyền thoại Jack Daniels phát triển. Nó hoạt động như một hệ thống điểm số chung: VDOT càng cao, khả năng chạy bộ của bạn càng xuất sắc. Ứng dụng dùng VDOT để tự động nội suy ra tốc độ (Pace) tập luyện và dự đoán thời gian thi đấu của bạn.",
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Dự đoán thành tích được tính toán bằng cách kết hợp sức mạnh cốt lõi (chỉ số VDOT) và sự chăm chỉ của bạn (Tỷ lệ hoàn thành bài tập).\n\nThuật toán cho thấy với phong độ hiện tại, bạn có thể hoàn thành ${userPrefs.targetDistance}km trong thời gian ${VdotCalculator.formatDuration(predictedSeconds)} (Pace trung bình ${VdotCalculator.formatPace((predictedSeconds / userPrefs.targetDistance).toInt())}).\n\n💡 Lời khuyên: Hãy bám sát giáo án và không bỏ lỡ các bài tập Long Run cuối tuần để nâng cao tỷ lệ tuân thủ, từ đó rút ngắn thời gian dự đoán!",
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(
+                        onClick = { showPredictionInfo = false }, 
+                        modifier = Modifier.fillMaxWidth(), 
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.secondary)
+                    ) {
+                        Text("Đóng", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondary)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showPaceZonesInfo) {
+        val easyCount = workoutsList.count { it.type == "EASY" }
+        val longCount = workoutsList.count { it.type == "LONG" }
+        val tempoCount = workoutsList.count { it.type == "TEMPO" || it.type == "INTERVAL" }
+        val runningCount = easyCount + longCount + tempoCount
+
+        Dialog(
+            onDismissRequest = { showPaceZonesInfo = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth(0.92f).padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
+                    Text("📊 Vùng Pace & Phân bổ", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Text("Tốc độ (Pace) được thiết kế chuyên biệt dựa trên VDOT của bạn, phân bổ theo quy tắc 80/20 (80% bài tập nhẹ nhàng, 20% bài tập cường độ cao).", fontSize = 14.sp, lineHeight = 20.sp)
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    val pctEasy = if (runningCount > 0) (easyCount + longCount) * 100 / runningCount else 0
+                    val pctTempo = if (runningCount > 0) tempoCount * 100 / runningCount else 0
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ColorEasy.copy(alpha = 0.1f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text("🟢 Easy Pace (${VdotCalculator.formatPace(userPrefs.easyPaceSec)}/km)", fontWeight = FontWeight.Bold, color = ColorEasy)
+                            Text("Chạy thả lỏng, nhịp tim vùng 2. Xây dựng sức bền hiếu khí nền tảng.", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            Text("Trong giáo án: $easyCount buổi (Đóng góp vào $pctEasy% khối lượng nhẹ)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ColorLong.copy(alpha = 0.1f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text("🔵 Long Run Pace (${VdotCalculator.formatPace(userPrefs.longPaceSec)}/km)", fontWeight = FontWeight.Bold, color = ColorLong)
+                            Text("Bài chạy dài cuối tuần. Giúp cơ thể làm quen với việc đốt mỡ và sức chịu đựng cơ bắp.", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            Text("Trong giáo án: $longCount buổi", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = ColorTempo.copy(alpha = 0.1f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(14.dp)) {
+                            Text("🔴 Tempo/Race Pace (${VdotCalculator.formatPace(userPrefs.tempoPaceSec)}/km)", fontWeight = FontWeight.Bold, color = ColorTempo)
+                            Text("Chạy ở ngưỡng yếm khí (Lactate Threshold). Dạy cơ thể chạy nhanh hơn mà không bị mỏi.", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
+                            Text("Trong giáo án: $tempoCount buổi (Chiếm $pctTempo% cường độ cao)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = { showPaceZonesInfo = false }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                        Text("Đóng", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
+    }
+
+    if (showVolumeInfo) {
+        val weeklyVols = workoutsList.groupBy { 
+            val d = try { LocalDate.parse(it.date) } catch(e:Exception) { LocalDate.now() }
+            ChronoUnit.WEEKS.between(LocalDate.parse(workoutsList.first().date), d)
+        }.mapValues { it.value.sumOf { w -> w.targetDistanceKm.toDouble() } }
+        
+        val maxVolWeek = weeklyVols.maxByOrNull { it.value }
+        val maxVol = maxVolWeek?.value ?: 0.0
+        val totalVol = weeklyVols.values.sum()
+
+        Dialog(
+            onDismissRequest = { showVolumeInfo = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                shape = RoundedCornerShape(20.dp),
+                modifier = Modifier.fillMaxWidth(0.92f).padding(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+            ) {
+                Column(modifier = Modifier.padding(24.dp).verticalScroll(rememberScrollState())) {
+                    Text("📈 Khối lượng luyện tập", fontSize = 20.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(20.dp))
+                    
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text("Phân tích dữ liệu:", fontWeight = FontWeight.Bold)
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Text("• Khối lượng tích lũy: ${String.format(java.util.Locale.US, "%.1f", totalVol)} km", fontSize = 14.sp)
+                            Text("• Tuần đạt đỉnh (Peak): Tuần thứ ${(maxVolWeek?.key ?: 0) + 1}", fontSize = 14.sp)
+                            Text("• Quãng đường tuần đỉnh: ${String.format(java.util.Locale.US, "%.1f", maxVol)} km", fontSize = 14.sp)
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+                    Text(
+                        "Biểu đồ khối lượng (Mileage) cho thấy nguyên tắc tăng tiến an toàn (không tăng quá 10% mỗi tuần).\n\nKhi bước vào 1-2 tuần cuối cùng trước Race Day, bạn sẽ thấy cột biểu đồ sụt giảm đột ngột. Đây là kỹ thuật Tapering (giảm tải) cực kỳ quan trọng, giúp cơ bắp đào thải toàn bộ mệt mỏi tích tụ và nạp đầy năng lượng Glycogen chuẩn bị cho ngày thi đấu.",
+                        fontSize = 14.sp,
+                        lineHeight = 22.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                    Button(onClick = { showVolumeInfo = false }, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(12.dp)) {
+                        Text("Đóng", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+        }
     }
 }
 
