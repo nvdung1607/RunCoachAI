@@ -333,9 +333,17 @@ fun OnboardingScreen(
                 },
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
-                ) {
+            ) {
                 Text("Tiếp Tục →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
+
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                text = "Phiên bản 1.1",
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
+                modifier = Modifier.padding(bottom = 20.dp)
+            )
         }
     }
 }
@@ -988,7 +996,19 @@ fun DashboardScreen(
             }
         }
 
-
+        item {
+            Spacer(modifier = Modifier.height(10.dp))
+            Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = "Phiên bản 1.1",
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f)
+                )
+            }
+        }
     }
 
     // Log workout dialog
