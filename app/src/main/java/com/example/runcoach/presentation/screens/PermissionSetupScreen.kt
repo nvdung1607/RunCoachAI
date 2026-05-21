@@ -108,9 +108,9 @@ fun PermissionSetupScreen(
     val healthConnectPermissionsLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract()
     ) { granted ->
-        android.util.Log.d("RunCoachHC", "==== HEALTH CONNECT PERMISSION LAUNCHER RESULT ====")
-        android.util.Log.d("RunCoachHC", "Required Permissions: ${healthConnectManager.requiredPermissions}")
-        android.util.Log.d("RunCoachHC", "Granted Permissions Returned: $granted")
+        com.example.runcoach.utils.AppLogger.d("==== HEALTH CONNECT PERMISSION LAUNCHER RESULT ====")
+        com.example.runcoach.utils.AppLogger.d("Required Permissions: ${healthConnectManager.requiredPermissions}")
+        com.example.runcoach.utils.AppLogger.d("Granted Permissions Returned: $granted")
         
         val missingPermissions = healthConnectManager.requiredPermissions.filter { it !in granted }
         if (missingPermissions.isNotEmpty()) {
@@ -120,8 +120,8 @@ fun PermissionSetupScreen(
         }
 
         hcPermissionsGranted = granted.containsAll(healthConnectManager.requiredPermissions)
-        android.util.Log.d("RunCoachHC", "hcPermissionsGranted flag set to: $hcPermissionsGranted")
-        android.util.Log.d("RunCoachHC", "==================================================")
+        com.example.runcoach.utils.AppLogger.d("hcPermissionsGranted flag set to: $hcPermissionsGranted")
+        com.example.runcoach.utils.AppLogger.d("==================================================")
 
         if (hcPermissionsGranted) {
             Toast.makeText(context, "Đã kết nối Health Connect thành công!", Toast.LENGTH_SHORT).show()
@@ -361,8 +361,8 @@ fun PermissionSetupScreen(
                                 isHcAvailable -> {
                                     Button(
                                         onClick = {
-                                            android.util.Log.d("RunCoachHC", "User clicked 'Kết nối thiết bị'. Launching permission request...")
-                                            android.util.Log.d("RunCoachHC", "Requesting permissions list: ${healthConnectManager.requiredPermissions}")
+                                            com.example.runcoach.utils.AppLogger.d("User clicked 'Kết nối thiết bị'. Launching permission request...")
+                                            com.example.runcoach.utils.AppLogger.d("Requesting permissions list: ${healthConnectManager.requiredPermissions}")
                                             healthConnectPermissionsLauncher.launch(healthConnectManager.requiredPermissions)
                                         },
                                         shape = RoundedCornerShape(10.dp),

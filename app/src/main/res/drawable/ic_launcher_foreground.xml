@@ -13,10 +13,10 @@
         android:translateX="18.0"
         android:translateY="18.0">
         
-        <!-- Cyan head circle (originally yellow) -->
+        <!-- Head circle (Blue) -->
         <path
             android:pathData="M 280,120 m -22,0 a 22,22 0 1,1 44,0 a 22,22 0 1,1 -44,0"
-            android:strokeColor="#06b6d4"
+            android:strokeColor="#3b82f6"
             android:strokeWidth="9"
             android:strokeLineCap="round" />
 

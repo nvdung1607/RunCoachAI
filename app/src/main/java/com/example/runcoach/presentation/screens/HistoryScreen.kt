@@ -429,8 +429,10 @@ fun HistoryWorkoutCard(
                                 "MANUAL" -> "Thủ công"
                                 else -> "Đồng bộ"
                             }
+                            val actualPace = if (workout.actualDistanceKm > 0) ((workout.actualDurationMin * 60) / workout.actualDistanceKm).toInt() else 0
+                            val paceStr = if (actualPace > 0) " @ ${com.example.runcoach.domain.plan.VdotCalculator.formatPace(actualPace)}" else ""
                             Text(
-                                text = "${workout.actualDistanceKm} km trong ${workout.actualDurationMin.toInt()} phút",
+                                text = "${workout.actualDistanceKm} km - ${workout.actualDurationMin.toInt()} phút$paceStr",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = ColorCompleted

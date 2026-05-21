@@ -45,10 +45,10 @@ class HealthConnectManager(private val context: Context) {
         return try {
             val granted = client.permissionController.getGrantedPermissions()
             val isAllGranted = granted.containsAll(requiredPermissions)
-            android.util.Log.d("RunCoachHC", "[HealthConnectManager] Checked permissions:")
-            android.util.Log.d("RunCoachHC", "  - Required: $requiredPermissions")
-            android.util.Log.d("RunCoachHC", "  - Granted: $granted")
-            android.util.Log.d("RunCoachHC", "  - containsAll: $isAllGranted")
+            com.example.runcoach.utils.AppLogger.d("[HealthConnectManager] Checked permissions:")
+            com.example.runcoach.utils.AppLogger.d("  - Required: $requiredPermissions")
+            com.example.runcoach.utils.AppLogger.d("  - Granted: $granted")
+            com.example.runcoach.utils.AppLogger.d("  - containsAll: $isAllGranted")
             if (!isAllGranted) {
                 val missing = requiredPermissions.filter { it !in granted }
                 android.util.Log.w("RunCoachHC", "  - Missing: $missing")

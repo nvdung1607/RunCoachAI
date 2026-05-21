@@ -101,6 +101,7 @@ fun OnboardingScreen(
                 modifier = Modifier
                     .size(90.dp)
                     .clip(RoundedCornerShape(24.dp))
+                    .background(Color.White)
             )
 
             Spacer(modifier = Modifier.height(20.dp))
@@ -246,7 +247,7 @@ fun OnboardingScreen(
                             val isSelected = maxSessions == sess
                             val label = when(sess) {
                                 3 -> "3 buổi\n(Gợi ý)"
-                                else -> "$sess buổi"
+                                else -> "$sess buổi\n "
                             }
                             Box(
                                 modifier = Modifier
@@ -645,6 +646,7 @@ fun DashboardScreen(
                         modifier = Modifier
                             .size(46.dp)
                             .clip(RoundedCornerShape(14.dp))
+                            .background(Color.White)
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Column(verticalArrangement = Arrangement.Center) {
@@ -779,6 +781,15 @@ fun DashboardScreen(
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
+                            val predictedPaceSec = if (userPrefs.targetDistance > 0) (predictedSeconds / userPrefs.targetDistance).toInt() else 0
+                            if (predictedPaceSec > 0) {
+                                Text(
+                                    text = "Pace: ${VdotCalculator.formatPace(predictedPaceSec)}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
                         }
                         Column(horizontalAlignment = Alignment.End) {
                             Text("Độ tuân thủ giáo án", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))

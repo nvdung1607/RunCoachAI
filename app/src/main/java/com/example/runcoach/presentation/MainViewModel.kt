@@ -52,12 +52,14 @@ class MainViewModel(
         )
 
     fun saveOnboarding(raceDate: String, fitnessLevel: String, targetDistance: Int, maxSessions: Int) {
+        com.example.runcoach.utils.AppLogger.d("User saved onboarding: raceDate=$raceDate, level=$fitnessLevel, target=${targetDistance}km, sessions=$maxSessions")
         viewModelScope.launch {
             prefsRepository.saveOnboardingPreferences(raceDate, fitnessLevel, targetDistance, maxSessions)
         }
     }
 
     fun completeTestRun(timeSeconds: Double) {
+        com.example.runcoach.utils.AppLogger.i("User completed test run: time=$timeSeconds seconds")
         viewModelScope.launch {
             val vdot = VdotCalculator.calculateVdotFor3k(timeSeconds)
             val paceZones = VdotCalculator.calculatePaceZones(vdot)
@@ -118,6 +120,7 @@ class MainViewModel(
     }
 
     fun updateWorkoutManualStats(date: String, distanceKm: Double, durationMin: Double, isCompleted: Boolean) {
+        com.example.runcoach.utils.AppLogger.i("Updating manual workout stats for date=$date: distance=$distanceKm, duration=$durationMin, completed=$isCompleted")
         viewModelScope.launch {
             val workout = workoutDao.getWorkoutByDate(date)
             if (workout != null) {
@@ -143,6 +146,7 @@ class MainViewModel(
         newDate: String,
         onResult: (result: Int, conflictDescription: String?) -> Unit
     ) {
+        com.example.runcoach.utils.AppLogger.i("Rescheduling workout from $originalDate to $newDate")
         viewModelScope.launch {
             val original = workoutDao.getWorkoutByDate(originalDate)
             if (original == null) {
@@ -176,11 +180,13 @@ class MainViewModel(
     }
 
     fun triggerSync() {
+        com.example.runcoach.utils.AppLogger.d("Manual Health Connect sync triggered by user")
         val syncRequest = OneTimeWorkRequestBuilder<SyncWorker>().build()
         WorkManager.getInstance(getApplication()).enqueue(syncRequest)
     }
 
     fun resetApp(onComplete: () -> Unit = {}) {
+        com.example.runcoach.utils.AppLogger.w("Resetting the application database and preferences!")
         viewModelScope.launch {
             prefsRepository.clear()
             workoutDao.clearAllWorkouts()

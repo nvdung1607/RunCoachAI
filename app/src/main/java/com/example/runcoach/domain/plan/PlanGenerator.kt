@@ -109,6 +109,8 @@ object PlanGenerator {
         val workouts = mutableListOf<WorkoutEntity>()
         val totalDays = ChronoUnit.DAYS.between(startDate, raceDate)
         val totalWeeks = (totalDays / 7.0).coerceAtLeast(4.0).toInt() + 1
+        
+        com.example.runcoach.utils.AppLogger.i("generatePlan: Start generating ${totalWeeks} weeks plan for ${targetDistance}km. Level=$level, MaxSessions=$maxSessionsPerWeek, VDOT=$vdotScore")
 
         val paceZones = VdotCalculator.calculatePaceZones(vdotScore)
         val isVeryBeginner = vdotScore < 25.0 && level == FitnessLevel.BEGINNER

@@ -91,7 +91,7 @@ class MainActivity : ComponentActivity() {
 
                         val isHcOk = hcPermissionsGranted || !isHcAvailable
                         if (hasNotificationPermission && isHcOk && !userPrefs.hasCompletedPermissionSetup && userPrefs.raceDate.isNotEmpty()) {
-                            android.util.Log.d("RunCoachHC", "All permissions already granted. Auto-completing permission setup.")
+                            com.example.runcoach.utils.AppLogger.d("All permissions already granted. Auto-completing permission setup.")
                             viewModel.completePermissionSetup()
                         }
                     }

@@ -6,9 +6,8 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.*
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -64,6 +63,7 @@ fun CalendarScreen(
             .background(bgBrush)
             .statusBarsPadding()
             .navigationBarsPadding()
+            .verticalScroll(rememberScrollState())
     ) {
         // Top bar
         Row(
@@ -178,7 +178,7 @@ fun CalendarScreen(
                         val date = if (isValidDay) currentYearMonth.atDay(dayNumber) else null
                         val workout = date?.let { workoutsMap[it.toString()] }
                         val isToday = date == LocalDate.now()
-                        val isSelected = date == selectedDate
+                        val isSelected = date != null && date == selectedDate
 
                         Box(
                             modifier = Modifier
@@ -189,14 +189,14 @@ fun CalendarScreen(
                                 .background(
                                     when {
                                         isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                        isToday -> MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)
+                                        isToday -> Color(0xFFF59E0B).copy(alpha = 0.15f) // Yellow background
                                         !isValidDay -> Color.Transparent
                                         else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                                     }
                                 )
                                 .border(
-                                    width = if (isToday) 1.5.dp else if (isSelected) 1.5.dp else 0.dp,
-                                    color = if (isToday) MaterialTheme.colorScheme.primary
+                                    width = if (isToday) 2.dp else if (isSelected) 1.5.dp else 0.dp,
+                                    color = if (isToday) Color(0xFFF59E0B) // Yellow border
                                     else if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                     else Color.Transparent,
                                     shape = RoundedCornerShape(10.dp)

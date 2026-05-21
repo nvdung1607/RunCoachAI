@@ -5,15 +5,12 @@
     android:viewportWidth="512"
     android:viewportHeight="512">
 
-    <!-- Background -->
-    <path
-        android:pathData="M 0,115 C 0,51.48 51.48,0 115,0 L 397,0 C 460.52,0 512,51.48 512,115 L 512,397 C 512,460.52 460.52,512 397,512 L 115,512 C 51.48,512 0,460.52 0,397 Z"
-        android:fillColor="#ffffff" />
 
-    <!-- Yellow head circle -->
+
+    <!-- Head circle (Blue) -->
     <path
         android:pathData="M 280,120 m -22,0 a 22,22 0 1,1 44,0 a 22,22 0 1,1 -44,0"
-        android:strokeColor="#06b6d4"
+        android:strokeColor="#3b82f6"
         android:strokeWidth="9"
         android:strokeLineCap="round" />
 
