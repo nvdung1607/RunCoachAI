@@ -12,21 +12,99 @@ enum class FitnessLevel {
     ADVANCED
 }
 
+data class FitnessConfig(
+    val startDistance: Double,
+    val peakDistance: Double,
+    val maxStep: Double
+)
+
+enum class Phase {
+    BASE, BUILD, PEAK, TAPER
+}
+
+enum class WorkoutRole {
+    EASY_1, EASY_2, EASY_3, QUALITY, LONG, REST
+}
+
 object PlanGenerator {
 
-    /**
-     * Generates a complete daily training schedule from startDate until raceDate.
-     * - Weeks always run Monday through Sunday.
-     * - Long Run is always scheduled on Saturday.
-     * - The plan is customized based on VDOT score, fitness level, and target distance.
-     */
+    private fun getFitnessConfig(targetDistance: Int, level: FitnessLevel): FitnessConfig {
+        return when (targetDistance) {
+            5 -> when (level) {
+                FitnessLevel.BEGINNER -> FitnessConfig(4.0, 8.0, 1.0)
+                FitnessLevel.INTERMEDIATE -> FitnessConfig(5.0, 9.0, 1.2)
+                FitnessLevel.ADVANCED -> FitnessConfig(6.0, 10.0, 1.5)
+            }
+            10 -> when (level) {
+                FitnessLevel.BEGINNER -> FitnessConfig(6.0, 12.0, 1.5)
+                FitnessLevel.INTERMEDIATE -> FitnessConfig(7.0, 14.0, 1.8)
+                FitnessLevel.ADVANCED -> FitnessConfig(8.0, 15.0, 2.0)
+            }
+            42 -> when (level) {
+                FitnessLevel.BEGINNER -> FitnessConfig(14.0, 30.0, 3.0)
+                FitnessLevel.INTERMEDIATE -> FitnessConfig(16.0, 32.0, 3.5)
+                FitnessLevel.ADVANCED -> FitnessConfig(18.0, 35.0, 4.0)
+            }
+            else -> when (level) { // 21k
+                FitnessLevel.BEGINNER -> FitnessConfig(6.0, 14.0, 1.5)
+                FitnessLevel.INTERMEDIATE -> FitnessConfig(8.0, 18.0, 1.8)
+                FitnessLevel.ADVANCED -> FitnessConfig(10.0, 21.0, 2.2)
+            }
+        }
+    }
+
+    private fun getPhase(w: Int, baseWeeks: Int, buildWeeks: Int, peakWeeks: Int): Phase {
+        return when {
+            w <= baseWeeks -> Phase.BASE
+            w <= baseWeeks + buildWeeks -> Phase.BUILD
+            w <= baseWeeks + buildWeeks + peakWeeks -> Phase.PEAK
+            else -> Phase.TAPER
+        }
+    }
+
+    private fun getWorkoutSchedule(sessions: Int, longRunDay: DayOfWeek): Map<DayOfWeek, WorkoutRole> {
+        val schedule = mutableMapOf<DayOfWeek, WorkoutRole>()
+        DayOfWeek.values().forEach { schedule[it] = WorkoutRole.REST }
+        
+        schedule[longRunDay] = WorkoutRole.LONG
+        val lrIndex = longRunDay.value
+        
+        fun getDay(offset: Int): DayOfWeek {
+            val newIdx = (lrIndex - 1 + offset + 7) % 7
+            return DayOfWeek.of(newIdx + 1)
+        }
+
+        when (sessions) {
+            2 -> {
+                schedule[getDay(-3)] = WorkoutRole.EASY_1
+            }
+            3 -> {
+                schedule[getDay(-5)] = WorkoutRole.EASY_1
+                schedule[getDay(-3)] = WorkoutRole.QUALITY
+            }
+            4 -> {
+                schedule[getDay(-5)] = WorkoutRole.EASY_1
+                schedule[getDay(-3)] = WorkoutRole.QUALITY
+                schedule[getDay(-2)] = WorkoutRole.EASY_2
+            }
+            else -> { // 5 or more
+                schedule[getDay(-6)] = WorkoutRole.EASY_3
+                schedule[getDay(-5)] = WorkoutRole.EASY_1
+                schedule[getDay(-3)] = WorkoutRole.QUALITY
+                schedule[getDay(-2)] = WorkoutRole.EASY_2
+            }
+        }
+        return schedule
+    }
+
     fun generatePlan(
         startDate: LocalDate,
         raceDate: LocalDate,
         vdotScore: Double,
         level: FitnessLevel,
-        targetDistance: Int = 21, // 5, 10, 21, 42
-        maxSessionsPerWeek: Int = 3
+        targetDistance: Int = 21,
+        maxSessionsPerWeek: Int = 3,
+        preferredLongRunDay: DayOfWeek = DayOfWeek.SUNDAY
     ): List<WorkoutEntity> {
         val workouts = mutableListOf<WorkoutEntity>()
         val totalDays = ChronoUnit.DAYS.between(startDate, raceDate)
@@ -35,287 +113,149 @@ object PlanGenerator {
         val paceZones = VdotCalculator.calculatePaceZones(vdotScore)
         val isVeryBeginner = vdotScore < 25.0 && level == FitnessLevel.BEGINNER
 
-        // Long Run is always on Saturday
-        val longRunDay = DayOfWeek.SATURDAY
-
         val raceDist = when (targetDistance) {
             5 -> 5.0
             10 -> 10.0
-            42 -> 42.2
-            else -> 21.1
+            42 -> 42.195
+            else -> 21.0975
         }
 
         val racePace = when (targetDistance) {
             5 -> paceZones.intervalPaceSec
             10 -> paceZones.tempoPaceSec
-            42 -> paceZones.longPaceSec
-            else -> paceZones.tempoPaceSec // 21k
+            42 -> paceZones.marathonPaceSec
+            else -> paceZones.tempoPaceSec
         }
+
+        // Periodization phases
+        val baseWeeks = maxOf(1, Math.round(totalWeeks * 0.3).toInt())
+        val buildWeeks = maxOf(1, Math.round(totalWeeks * 0.4).toInt())
+        val taperWeeks = if (totalWeeks > 8) 3 else if (totalWeeks > 4) 2 else 1
+        val peakWeeks = maxOf(1, totalWeeks - baseWeeks - buildWeeks - taperWeeks)
+
+        val config = getFitnessConfig(targetDistance, level)
+        val longRunDistances = DoubleArray(totalWeeks + 1)
+
+        for (w in 1..totalWeeks) {
+            if (w == totalWeeks) {
+                longRunDistances[w] = raceDist
+                continue
+            }
+            
+            val phase = getPhase(w, baseWeeks, buildWeeks, peakWeeks)
+            val isRecovery = w % 4 == 0 && phase != Phase.PEAK && phase != Phase.TAPER
+            var dist = 0.0
+
+            when (phase) {
+                Phase.BASE -> {
+                    val progress = (w - 1).toDouble() / maxOf(1, baseWeeks)
+                    val endBaseDist = config.startDistance + (config.peakDistance - config.startDistance) * 0.5
+                    dist = config.startDistance + (endBaseDist - config.startDistance) * progress
+                }
+                Phase.BUILD -> {
+                    val startBuildDist = config.startDistance + (config.peakDistance - config.startDistance) * 0.5
+                    val progress = (w - baseWeeks - 1).toDouble() / maxOf(1, buildWeeks - 1)
+                    dist = startBuildDist + (config.peakDistance - startBuildDist) * progress
+                }
+                Phase.PEAK -> {
+                    dist = config.peakDistance
+                }
+                Phase.TAPER -> {
+                    val taperW = w - (baseWeeks + buildWeeks + peakWeeks)
+                    if (taperWeeks == 3) {
+                        dist = if (taperW == 1) config.peakDistance * 0.80 else config.peakDistance * 0.60
+                    } else if (taperWeeks == 2) {
+                        dist = config.peakDistance * 0.70
+                    } else {
+                        dist = config.peakDistance * 0.60
+                    }
+                }
+            }
+            
+            if (isRecovery) dist *= 0.75
+            longRunDistances[w] = (Math.round(dist * 10.0) / 10.0).coerceAtLeast(2.0)
+        }
+
+        val schedule = getWorkoutSchedule(maxSessionsPerWeek, preferredLongRunDay)
 
         for (dayOffset in 0..totalDays) {
             val currentDate = startDate.plusDays(dayOffset)
             val startWeekMonday = startDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
             val currentWeekMonday = currentDate.with(TemporalAdjusters.previousOrSame(DayOfWeek.MONDAY))
-            val weekNumber = ChronoUnit.WEEKS.between(startWeekMonday, currentWeekMonday).toInt() + 1
+            val weekNumber = (ChronoUnit.WEEKS.between(startWeekMonday, currentWeekMonday).toInt() + 1).coerceAtMost(totalWeeks)
 
-            val currentDayOfWeek = currentDate.dayOfWeek
+            val dayOfWeek = currentDate.dayOfWeek
 
-            val workout = when {
-                // The actual race day
-                currentDate.isEqual(raceDate) -> {
+            if (currentDate.isEqual(raceDate)) {
+                val raceDistDesc = when (targetDistance) {
+                    5 -> "5 km"
+                    10 -> "10 km"
+                    42 -> "42.195 km"
+                    21 -> "21.0975 km"
+                    else -> "$targetDistance km"
+                }
+                workouts.add(WorkoutEntity(
+                    date = currentDate.toString(),
+                    weekNumber = weekNumber,
+                    type = "RACE",
+                    targetDistanceKm = raceDist,
+                    targetPaceSec = racePace,
+                    description = "RACE DAY! Chinh phục cự ly $raceDistDesc",
+                    instructions = "Chúc mừng bạn! Hôm nay là ngày tỏa sáng. Khởi động kỹ, giữ tốc độ ổn định ở nửa đầu và bứt phá ở nửa cuối.",
+                    isCompleted = false
+                ))
+                continue
+            }
+
+            if (weekNumber == totalWeeks) {
+                // Race Week tapering
+                if (schedule[dayOfWeek] == WorkoutRole.EASY_1 || schedule[dayOfWeek] == WorkoutRole.QUALITY) {
+                    val isFirst = schedule[dayOfWeek] == WorkoutRole.EASY_1
+                    val dist = if (isFirst) 3.0 else 2.0
+                    workouts.add(createEasyRun(currentDate, weekNumber, dist, paceZones.easyPaceSec, isVeryBeginner, "Chạy thả lỏng trước Race"))
+                } else {
+                    workouts.add(createRestWorkout(currentDate, weekNumber))
+                }
+                continue
+            }
+
+            val role = schedule[dayOfWeek] ?: WorkoutRole.REST
+            val phase = getPhase(weekNumber, baseWeeks, buildWeeks, peakWeeks)
+            val isRecoveryWeek = weekNumber % 4 == 0 && phase != Phase.PEAK && phase != Phase.TAPER
+            val lDist = longRunDistances[weekNumber]
+
+            val workout = when (role) {
+                WorkoutRole.REST -> createRestWorkout(currentDate, weekNumber)
+                WorkoutRole.LONG -> {
+                    val hasMPace = phase == Phase.PEAK
+                    val targetPace = if (hasMPace) paceZones.marathonPaceSec else paceZones.longPaceSec
+                    val typeStr = if (hasMPace) "LONG (M-Pace)" else "LONG"
+                    val desc = if (hasMPace) "Chạy dài Đạt đỉnh (Marathon Pace) (${lDist}km) 🏆" else "Chạy dài tích lũy sức bền (${lDist}km)"
+                    val instr = if (hasMPace) "Mô phỏng ngày thi đấu. Giữ tốc độ mục tiêu (Marathon Pace) trong phần lớn quãng đường." else "Chạy ở tốc độ thoải mái, có thể trò chuyện. Uống nước sau mỗi 3-5km."
                     WorkoutEntity(
                         date = currentDate.toString(),
                         weekNumber = weekNumber,
-                        type = "RACE",
-                        targetDistanceKm = raceDist,
-                        targetPaceSec = racePace,
-                        description = "RACE DAY! Chinh phục cự ly $targetDistance km 🏁",
-                        instructions = "Chúc mừng bạn! Hôm nay là ngày bạn tỏa sáng. Hãy khởi động kỹ, giữ tốc độ ổn định ở nửa đầu và bứt phá ở nửa cuối.",
+                        type = typeStr,
+                        targetDistanceKm = lDist,
+                        targetPaceSec = targetPace,
+                        description = desc,
+                        instructions = instr,
                         isCompleted = false
                     )
                 }
-
-                // Race Week tapering (last week of plan)
-                weekNumber == totalWeeks -> {
-                    val easyDist = when (targetDistance) {
-                        5 -> 2.0
-                        10 -> 3.0
-                        42 -> 6.0
-                        else -> 3.0
-                    }
-                    val shakeoutDist = when (targetDistance) {
-                        5 -> 1.5
-                        10 -> 2.0
-                        42 -> 4.0
-                        else -> 2.0
-                    }
-                    when (currentDayOfWeek) {
-                        DayOfWeek.TUESDAY -> WorkoutEntity(
-                            date = currentDate.toString(),
-                            weekNumber = weekNumber,
-                            type = "EASY",
-                            targetDistanceKm = easyDist,
-                            targetPaceSec = paceZones.easyPaceSec,
-                            description = "Chạy nhẹ thả lỏng trước race (${easyDist}km)",
-                            instructions = "Chạy nhẹ nhàng thoải mái để giữ cảm giác chân. Đừng cố gắng quá sức.",
-                            isCompleted = false
-                        )
-                        DayOfWeek.THURSDAY -> {
-                            if (maxSessionsPerWeek <= 2) {
-                                createRestOrCtWorkout(currentDate, weekNumber)
-                            } else {
-                                WorkoutEntity(
-                                    date = currentDate.toString(),
-                                    weekNumber = weekNumber,
-                                    type = "EASY",
-                                    targetDistanceKm = shakeoutDist,
-                                    targetPaceSec = paceZones.easyPaceSec,
-                                    description = "Chạy thả lỏng cuối cùng (${shakeoutDist}km)",
-                                    instructions = "Chạy siêu nhẹ, thư giãn cơ thể. Nghỉ ngơi từ hôm nay đến race day.",
-                                    isCompleted = false
-                                )
-                            }
+                WorkoutRole.EASY_1 -> createEasyRun(currentDate, weekNumber, (lDist * 0.5).coerceAtLeast(2.0), paceZones.easyPaceSec, isVeryBeginner, "Chạy Easy phục hồi")
+                WorkoutRole.EASY_2 -> createEasyRun(currentDate, weekNumber, (lDist * 0.4).coerceAtLeast(2.0), paceZones.easyPaceSec, isVeryBeginner, "Chạy Easy duy trì")
+                WorkoutRole.EASY_3 -> createEasyRun(currentDate, weekNumber, (lDist * 0.3).coerceAtLeast(2.0), paceZones.easyPaceSec, isVeryBeginner, "Chạy nhẹ nhàng")
+                WorkoutRole.QUALITY -> {
+                    val qDist = (lDist * 0.5).coerceAtLeast(2.0)
+                    if (phase == Phase.BASE || isRecoveryWeek || level == FitnessLevel.BEGINNER) {
+                        createEasyRun(currentDate, weekNumber, qDist, paceZones.easyPaceSec, isVeryBeginner, "Chạy Easy nền tảng")
+                    } else {
+                        if (phase == Phase.BUILD && weekNumber % 2 == 0 && level == FitnessLevel.ADVANCED) {
+                            createIntervalRun(currentDate, weekNumber, qDist, paceZones.intervalPaceSec)
+                        } else {
+                            createTempoRun(currentDate, weekNumber, qDist, paceZones.tempoPaceSec)
                         }
-                        else -> createRestOrCtWorkout(currentDate, weekNumber)
-                    }
-                }
-
-                // Taper Week -1 (1 week before race)
-                weekNumber == totalWeeks - 1 -> {
-                    val taperLongDist = when (targetDistance) {
-                        5 -> 5.0
-                        10 -> 8.0
-                        42 -> 20.0
-                        else -> 12.0
-                    }
-                    val easyT1 = when (targetDistance) {
-                        5 -> 3.0
-                        10 -> 4.0
-                        42 -> 8.0
-                        else -> 5.0
-                    }
-                    val easyT2 = when (targetDistance) {
-                        5 -> 2.0
-                        10 -> 3.0
-                        42 -> 6.0
-                        else -> 4.0
-                    }
-                    when (currentDayOfWeek) {
-                        longRunDay -> {
-                            WorkoutEntity(
-                                date = currentDate.toString(),
-                                weekNumber = weekNumber,
-                                type = "LONG",
-                                targetDistanceKm = taperLongDist,
-                                targetPaceSec = paceZones.longPaceSec,
-                                description = "Chạy dài giảm tải (${taperLongDist}km)",
-                                instructions = "Tuần giảm tải cận kề ngày race. Chạy nhẹ nhàng ở pace thoải mái.",
-                                isCompleted = false
-                            )
-                        }
-                        DayOfWeek.TUESDAY -> createEasyRun(currentDate, weekNumber, easyT1, paceZones.easyPaceSec, isVeryBeginner)
-                        DayOfWeek.THURSDAY -> {
-                            if (maxSessionsPerWeek <= 2) {
-                                createRestOrCtWorkout(currentDate, weekNumber)
-                            } else {
-                                createEasyRun(currentDate, weekNumber, easyT2, paceZones.easyPaceSec, isVeryBeginner)
-                            }
-                        }
-                        else -> createRestOrCtWorkout(currentDate, weekNumber)
-                    }
-                }
-
-                // Taper Week -2 (2 weeks before race)
-                weekNumber == totalWeeks - 2 -> {
-                    val taperLongDist = when (targetDistance) {
-                        5 -> 6.0
-                        10 -> 10.0
-                        42 -> 26.0
-                        else -> 16.0
-                    }
-                    val easyT1 = when (targetDistance) {
-                        5 -> 4.0
-                        10 -> 5.0
-                        42 -> 10.0
-                        else -> 6.0
-                    }
-                    when (currentDayOfWeek) {
-                        longRunDay -> WorkoutEntity(
-                            date = currentDate.toString(),
-                            weekNumber = weekNumber,
-                            type = "LONG",
-                            targetDistanceKm = taperLongDist,
-                            targetPaceSec = paceZones.longPaceSec,
-                            description = "Chạy dài taper (${taperLongDist}km)",
-                            instructions = "Bài chạy dài chuẩn bị taper. Giữ pace chạy nhẹ, tiết kiệm năng lượng.",
-                            isCompleted = false
-                        )
-                        DayOfWeek.TUESDAY -> createEasyRun(currentDate, weekNumber, easyT1, paceZones.easyPaceSec, isVeryBeginner)
-                        DayOfWeek.THURSDAY -> {
-                            if (maxSessionsPerWeek <= 2) {
-                                createRestOrCtWorkout(currentDate, weekNumber)
-                            } else {
-                                createTempoOrEasy(currentDate, weekNumber, paceZones, level, totalWeeks, isVeryBeginner, targetDistance)
-                            }
-                        }
-                        else -> createRestOrCtWorkout(currentDate, weekNumber)
-                    }
-                }
-
-                // Peak Week (3 weeks before race)
-                weekNumber == totalWeeks - 3 -> {
-                    when (currentDayOfWeek) {
-                        longRunDay -> {
-                            val peakDistance = when (targetDistance) {
-                                5 -> when (level) {
-                                    FitnessLevel.BEGINNER -> 8.0
-                                    FitnessLevel.INTERMEDIATE -> 9.0
-                                    FitnessLevel.ADVANCED -> 10.0
-                                }
-                                10 -> when (level) {
-                                    FitnessLevel.BEGINNER -> 12.0
-                                    FitnessLevel.INTERMEDIATE -> 14.0
-                                    FitnessLevel.ADVANCED -> 15.0
-                                }
-                                42 -> when (level) {
-                                    FitnessLevel.BEGINNER -> 30.0
-                                    FitnessLevel.INTERMEDIATE -> 32.0
-                                    FitnessLevel.ADVANCED -> 35.0
-                                }
-                                else -> when (level) {
-                                    FitnessLevel.BEGINNER -> 18.0
-                                    FitnessLevel.INTERMEDIATE -> 20.0
-                                    FitnessLevel.ADVANCED -> 21.0
-                                }
-                            }
-                            WorkoutEntity(
-                                date = currentDate.toString(),
-                                weekNumber = weekNumber,
-                                type = "LONG",
-                                targetDistanceKm = peakDistance,
-                                targetPaceSec = paceZones.longPaceSec,
-                                description = "Chạy dài đỉnh điểm (${peakDistance}km) 🏆",
-                                instructions = "Đây là buổi chạy dài quan trọng nhất trước race! Bổ sung nước đầy đủ và giữ pace thoải mái.",
-                                isCompleted = false
-                            )
-                        }
-                        DayOfWeek.TUESDAY -> createEasyRun(currentDate, weekNumber, calculateEasyDistance(weekNumber, totalWeeks, true, targetDistance), paceZones.easyPaceSec, isVeryBeginner)
-                        DayOfWeek.THURSDAY -> {
-                            if (maxSessionsPerWeek <= 2) {
-                                createRestOrCtWorkout(currentDate, weekNumber)
-                            } else {
-                                createTempoOrEasy(currentDate, weekNumber, paceZones, level, totalWeeks, isVeryBeginner, targetDistance)
-                            }
-                        }
-                        DayOfWeek.FRIDAY -> {
-                            if (maxSessionsPerWeek <= 3) {
-                                createRestOrCtWorkout(currentDate, weekNumber)
-                            } else {
-                                val recDist = when (targetDistance) {
-                                    5 -> 2.0
-                                    10 -> 3.0
-                                    42 -> 6.0
-                                    else -> 4.0
-                                }
-                                createRecoveryRun(currentDate, weekNumber, recDist, paceZones.easyPaceSec)
-                            }
-                        }
-                        else -> createRestOrCtWorkout(currentDate, weekNumber)
-                    }
-                }
-
-                // Regular training weeks
-                else -> {
-                    when (currentDayOfWeek) {
-                        longRunDay -> {
-                            val distance = calculateLongRunDistance(weekNumber, totalWeeks, level, targetDistance)
-                            val instructions = if (isVeryBeginner && weekNumber <= 3) {
-                                "Chiến thuật chạy/đi bộ: Chạy nhẹ 2 phút, đi bộ 1 phút. Lặp lại cho đến khi hoàn thành."
-                            } else {
-                                "Chạy ở tốc độ thoải mái, vừa chạy vừa nói chuyện được. Tập luyện uống nước sau mỗi 3-5km."
-                            }
-                            WorkoutEntity(
-                                date = currentDate.toString(),
-                                weekNumber = weekNumber,
-                                type = "LONG",
-                                targetDistanceKm = distance,
-                                targetPaceSec = paceZones.longPaceSec,
-                                description = "Chạy dài tích lũy sức bền (${distance}km)",
-                                instructions = instructions,
-                                isCompleted = false
-                            )
-                        }
-
-                        DayOfWeek.SUNDAY -> createRestOrCtWorkout(currentDate, weekNumber)
-
-                        DayOfWeek.TUESDAY -> {
-                            val distance = calculateEasyDistance(weekNumber, totalWeeks, isTuesday = true, targetDistance = targetDistance)
-                            createEasyRun(currentDate, weekNumber, distance, paceZones.easyPaceSec, isVeryBeginner)
-                        }
-
-                        DayOfWeek.THURSDAY -> {
-                            if (maxSessionsPerWeek <= 2) {
-                                createRestOrCtWorkout(currentDate, weekNumber)
-                            } else {
-                                createTempoOrEasy(currentDate, weekNumber, paceZones, level, totalWeeks, isVeryBeginner, targetDistance)
-                            }
-                        }
-
-                        DayOfWeek.WEDNESDAY -> {
-                            val recDist = when (targetDistance) {
-                                5 -> 2.0
-                                10 -> 3.0
-                                42 -> 6.0
-                                else -> 3.0
-                            }
-                            if (weekNumber % 4 == 0 && maxSessionsPerWeek >= 4) {
-                                createRecoveryRun(currentDate, weekNumber, recDist, paceZones.easyPaceSec)
-                            } else {
-                                createRestOrCtWorkout(currentDate, weekNumber)
-                            }
-                        }
-
-                        else -> createRestWorkout(currentDate, weekNumber)
                     }
                 }
             }
@@ -324,200 +264,23 @@ object PlanGenerator {
         return workouts
     }
 
-    private fun createEasyRun(date: LocalDate, weekNumber: Int, distance: Double, paceSec: Int, isVeryBeginner: Boolean): WorkoutEntity {
-        val instructions = if (isVeryBeginner && weekNumber <= 3) {
-            "Chiến thuật chạy/đi bộ: Chạy nhẹ 1 phút, đi bộ 1 phút. Tổng cộng 20-30 phút."
-        } else {
-            "Chạy nhẹ nhàng thư giãn cơ thể. Giữ nhịp thở đều và ổn định. Tránh chạy quá nhanh."
-        }
-        return WorkoutEntity(
-            date = date.toString(),
-            weekNumber = weekNumber,
-            type = "EASY",
-            targetDistanceKm = distance,
-            targetPaceSec = paceSec,
-            description = "Chạy nhẹ thư giãn (${distance}km)",
-            instructions = instructions,
-            isCompleted = false
-        )
+    private fun createEasyRun(date: LocalDate, weekNumber: Int, distance: Double, paceSec: Int, isVeryBeginner: Boolean, title: String): WorkoutEntity {
+        val dist = Math.round(distance * 10.0) / 10.0
+        val instructions = if (isVeryBeginner && weekNumber <= 3) "Chiến thuật chạy/đi bộ: Chạy nhẹ 1 phút, đi bộ 1 phút." else "Chạy nhẹ nhàng thư giãn cơ thể. Giữ nhịp thở đều và ổn định."
+        return WorkoutEntity(date = date.toString(), weekNumber = weekNumber, type = "EASY", targetDistanceKm = dist, targetPaceSec = paceSec, description = "$title (${dist}km)", instructions = instructions, isCompleted = false)
     }
 
-    private fun createRecoveryRun(date: LocalDate, weekNumber: Int, distance: Double, paceSec: Int): WorkoutEntity {
-        return WorkoutEntity(
-            date = date.toString(),
-            weekNumber = weekNumber,
-            type = "RECOVERY",
-            targetDistanceKm = distance,
-            targetPaceSec = paceSec + 30, // 30s/km slower than easy
-            description = "Chạy phục hồi nhẹ (${distance}km)",
-            instructions = "Chạy cực nhẹ nhàng để giúp cơ thể hồi phục nhanh hơn. Không cần ép pace.",
-            isCompleted = false
-        )
+    private fun createIntervalRun(date: LocalDate, weekNumber: Int, distance: Double, paceSec: Int): WorkoutEntity {
+        val dist = Math.round(distance * 10.0) / 10.0
+        return WorkoutEntity(date = date.toString(), weekNumber = weekNumber, type = "INTERVAL", targetDistanceKm = dist, targetPaceSec = paceSec, description = "Chạy Biến tốc (Interval) (${dist}km)", instructions = "Khởi động 2km. Chạy tốc độ rất nhanh (Interval Pace) trong 1km, đi bộ phục hồi 2 phút. Lặp lại.", isCompleted = false)
     }
 
-    private fun createTempoOrEasy(
-        date: LocalDate, weekNumber: Int, paceZones: PaceZones, level: FitnessLevel, totalWeeks: Int, isVeryBeginner: Boolean, targetDistance: Int
-    ): WorkoutEntity {
-        val isTempoWeek = level != FitnessLevel.BEGINNER && weekNumber % 3 == 0 && weekNumber < totalWeeks - 3
-        return if (isTempoWeek) {
-            val distance = when (targetDistance) {
-                5 -> 3.0 + (weekNumber / 8.0)
-                10 -> 4.0 + (weekNumber / 6.0)
-                42 -> 8.0 + (weekNumber / 3.0)
-                else -> 5.0 + (weekNumber / 4.0) // 21k
-            }
-            WorkoutEntity(
-                date = date.toString(),
-                weekNumber = weekNumber,
-                type = "TEMPO",
-                targetDistanceKm = distance,
-                targetPaceSec = paceZones.tempoPaceSec,
-                description = "Chạy Tempo nâng ngưỡng thể lực (${String.format("%.1f", distance)}km)",
-                instructions = "Khởi động 1-2km chạy nhẹ. Chạy phần chính ở tốc độ 'mệt nhưng có thể duy trì'. Thả lỏng dãn cơ cuối bài.",
-                isCompleted = false
-            )
-        } else {
-            val distance = calculateEasyDistance(weekNumber, totalWeeks, isTuesday = false, targetDistance = targetDistance)
-            createEasyRun(date, weekNumber, distance, paceZones.easyPaceSec, isVeryBeginner)
-        }
-    }
-
-    private fun createRestOrCtWorkout(date: LocalDate, weekNumber: Int): WorkoutEntity {
-        val dayOfWeek = date.dayOfWeek
-        return if (dayOfWeek == DayOfWeek.WEDNESDAY || dayOfWeek == DayOfWeek.SUNDAY) {
-            WorkoutEntity(
-                date = date.toString(),
-                weekNumber = weekNumber,
-                type = "CT",
-                targetDistanceKm = 0.0,
-                targetPaceSec = 0,
-                description = "Tập bổ trợ nhẹ nhàng (Bơi/Yoga/Đạp xe)",
-                instructions = "Thực hiện các bài tập bổ trợ tim mạch ít chấn động như bơi lội, đạp xe hoặc yoga giãn cơ trong 30-45 phút.",
-                isCompleted = false
-            )
-        } else {
-            createRestWorkout(date, weekNumber)
-        }
+    private fun createTempoRun(date: LocalDate, weekNumber: Int, distance: Double, paceSec: Int): WorkoutEntity {
+        val dist = Math.round(distance * 10.0) / 10.0
+        return WorkoutEntity(date = date.toString(), weekNumber = weekNumber, type = "TEMPO", targetDistanceKm = dist, targetPaceSec = paceSec, description = "Chạy Tempo nâng ngưỡng (${dist}km)", instructions = "Khởi động 1-2km. Chạy phần chính ở tốc độ 'mệt nhưng có thể duy trì' (Threshold Pace).", isCompleted = false)
     }
 
     private fun createRestWorkout(date: LocalDate, weekNumber: Int): WorkoutEntity {
-        return WorkoutEntity(
-            date = date.toString(),
-            weekNumber = weekNumber,
-            type = "REST",
-            targetDistanceKm = 0.0,
-            targetPaceSec = 0,
-            description = "Nghỉ ngơi hoàn toàn",
-            instructions = "Cơ thể phục hồi và phát triển trong những ngày nghỉ. Hãy chú ý dinh dưỡng và ngủ đủ giấc.",
-            isCompleted = false
-        )
-    }
-
-    private fun calculateLongRunDistance(week: Int, totalWeeks: Int, level: FitnessLevel, targetDistance: Int): Double {
-        val startDistance = when (targetDistance) {
-            5 -> when (level) {
-                FitnessLevel.BEGINNER -> 4.0
-                FitnessLevel.INTERMEDIATE -> 5.0
-                FitnessLevel.ADVANCED -> 6.0
-            }
-            10 -> when (level) {
-                FitnessLevel.BEGINNER -> 6.0
-                FitnessLevel.INTERMEDIATE -> 7.0
-                FitnessLevel.ADVANCED -> 8.0
-            }
-            42 -> when (level) {
-                FitnessLevel.BEGINNER -> 14.0
-                FitnessLevel.INTERMEDIATE -> 16.0
-                FitnessLevel.ADVANCED -> 18.0
-            }
-            else -> when (level) { // 21k
-                FitnessLevel.BEGINNER -> 6.0
-                FitnessLevel.INTERMEDIATE -> 8.0
-                FitnessLevel.ADVANCED -> 10.0
-            }
-        }
-
-        val peakDistance = when (targetDistance) {
-            5 -> when (level) {
-                FitnessLevel.BEGINNER -> 8.0
-                FitnessLevel.INTERMEDIATE -> 9.0
-                FitnessLevel.ADVANCED -> 10.0
-            }
-            10 -> when (level) {
-                FitnessLevel.BEGINNER -> 12.0
-                FitnessLevel.INTERMEDIATE -> 14.0
-                FitnessLevel.ADVANCED -> 15.0
-            }
-            42 -> when (level) {
-                FitnessLevel.BEGINNER -> 30.0
-                FitnessLevel.INTERMEDIATE -> 32.0
-                FitnessLevel.ADVANCED -> 35.0
-            }
-            else -> when (level) { // 21k
-                FitnessLevel.BEGINNER -> 18.0
-                FitnessLevel.INTERMEDIATE -> 20.0
-                FitnessLevel.ADVANCED -> 21.0
-            }
-        }
-
-        val cycleIndex = (week - 1) % 4
-        val adjustedWeek = week - (week / 4)
-
-        val step = when (targetDistance) {
-            5 -> 1.0
-            10 -> 1.5
-            42 -> 3.0
-            else -> 2.0
-        }
-
-        return if (cycleIndex == 3) {
-            val prevDistance = startDistance + (adjustedWeek - 1) * step
-            (prevDistance * 0.75).coerceAtLeast(startDistance).coerceAtMost(peakDistance)
-        } else {
-            (startDistance + adjustedWeek * step).coerceAtMost(peakDistance)
-        }
-    }
-
-    private fun calculateEasyDistance(week: Int, totalWeeks: Int, isTuesday: Boolean, targetDistance: Int): Double {
-        val weeksBeforeRace = totalWeeks - week
-        if (weeksBeforeRace <= 1) {
-            return when (targetDistance) {
-                5 -> 2.0
-                10 -> 3.0
-                42 -> 5.0
-                else -> 3.0
-            }
-        }
-        if (weeksBeforeRace == 2) {
-            return when (targetDistance) {
-                5 -> 3.0
-                10 -> 4.0
-                42 -> 6.0
-                else -> 4.0
-            }
-        }
-
-        val baseDistance = when (targetDistance) {
-            5 -> if (isTuesday) 2.5 else 3.0
-            10 -> if (isTuesday) 3.5 else 4.0
-            42 -> if (isTuesday) 6.0 else 8.0
-            else -> if (isTuesday) 4.0 else 5.0 // 21k
-        }
-
-        val maxDist = when (targetDistance) {
-            5 -> 5.0
-            10 -> 7.0
-            42 -> 14.0
-            else -> 9.0
-        }
-
-        val progression = (week / 4).toDouble() * when (targetDistance) {
-            5 -> 0.5
-            10 -> 0.8
-            42 -> 1.5
-            else -> 1.0
-        }
-
-        return (baseDistance + progression).coerceAtMost(maxDist)
+        return WorkoutEntity(date = date.toString(), weekNumber = weekNumber, type = "REST", targetDistanceKm = 0.0, targetPaceSec = 0, description = "Nghỉ ngơi hoàn toàn", instructions = "Cơ thể phục hồi và phát triển trong những ngày nghỉ.", isCompleted = false)
     }
 }

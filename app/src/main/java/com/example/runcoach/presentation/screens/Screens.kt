@@ -67,7 +67,7 @@ fun OnboardingScreen(
     viewModel: MainViewModel,
     onNavigateToTestRun: () -> Unit
 ) {
-    var raceDateText by remember { mutableStateOf("2026-08-22") }
+    var raceDateText by remember { mutableStateOf(LocalDate.now().plusMonths(3).toString()) }
     var fitnessLevel by remember { mutableStateOf("BEGINNER") }
     var targetDistance by remember { mutableIntStateOf(21) }
     var maxSessions by remember { mutableIntStateOf(3) }
@@ -124,17 +124,49 @@ fun OnboardingScreen(
                     Text("Thiết lập mục tiêu", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(modifier = Modifier.height(16.dp))
 
-                    OutlinedTextField(
-                        value = raceDateText,
-                        onValueChange = { raceDateText = it },
-                        label = { Text("Ngày diễn ra giải chạy (Race Day)") },
-                        placeholder = { Text("YYYY-MM-DD") },
-                        leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
-                        modifier = Modifier.fillMaxWidth()
-                    )
+                    Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                val parsedDate = try {
+                                    LocalDate.parse(raceDateText)
+                                } catch (e: Exception) {
+                                    LocalDate.now().plusMonths(3)
+                                }
+                                android.app.DatePickerDialog(
+                                    context,
+                                    { _, year, month, dayOfMonth ->
+                                        val selectedDate = LocalDate.of(year, month + 1, dayOfMonth)
+                                        raceDateText = selectedDate.toString()
+                                    },
+                                    parsedDate.year,
+                                    parsedDate.monthValue - 1,
+                                    parsedDate.dayOfMonth
+                                ).apply {
+                                    datePicker.minDate = System.currentTimeMillis()
+                                    show()
+                                }
+                            }
+                    ) {
+                        OutlinedTextField(
+                            value = raceDateText,
+                            onValueChange = {},
+                            label = { Text("Ngày diễn ra giải chạy (Race Day)") },
+                            leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
+                            readOnly = true,
+                            enabled = false,
+                            colors = OutlinedTextFieldDefaults.colors(
+                                disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                                disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
+                            ),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
                     Text(
-                        "Định dạng YYYY-MM-DD. Ví dụ: 2026-08-22",
+                        "Nhấp chọn để mở lịch. Hệ thống khuyên dùng tối thiểu 4-12 tuần.",
                         fontSize = 11.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
                         modifier = Modifier.padding(horizontal = 4.dp, vertical = 2.dp)
@@ -1079,32 +1111,6 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        
-                        Spacer(modifier = Modifier.height(6.dp))
-                        
-                        // Distance presets Row
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            AssistChip(
-                                onClick = { logDistanceText = workout.targetDistanceKm.toString() },
-                                label = { Text("Đúng mục tiêu", fontSize = 11.sp) },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                            )
-                            listOf(0.5, 1.0, 2.0).forEach { addVal ->
-                                AssistChip(
-                                    onClick = {
-                                        val current = logDistanceText.toDoubleOrNull() ?: 0.0
-                                        logDistanceText = String.format(java.util.Locale.US, "%.1f", current + addVal)
-                                    },
-                                    label = { Text("+${addVal} km", fontSize = 11.sp) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                                )
-                            }
-                        }
                     }
                     
                     Spacer(modifier = Modifier.height(14.dp))
@@ -1130,32 +1136,63 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
-                        
-                        Spacer(modifier = Modifier.height(6.dp))
-                        
-                        // Duration presets Row
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(6.dp),
-                            modifier = Modifier.fillMaxWidth()
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // Exactly 3 Helper Buttons
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        // Button 1: Đúng mục tiêu
+                        val targetDurationMin = ((workout.targetDistanceKm * workout.targetPaceSec) / 60.0).toInt()
+                        Button(
+                            onClick = {
+                                logDistanceText = workout.targetDistanceKm.toString()
+                                logDurationText = targetDurationMin.toString()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                            ),
+                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(1.2f)
                         ) {
-                            val targetDurationMin = ((workout.targetDistanceKm * workout.targetPaceSec) / 60.0).toInt()
-                            AssistChip(
-                                onClick = { logDurationText = targetDurationMin.toString() },
-                                label = { Text("Đúng mục tiêu", fontSize = 11.sp) },
-                                shape = RoundedCornerShape(8.dp),
-                                colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            Icon(
+                                imageVector = Icons.Default.Flag,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
                             )
-                            listOf(5, 10, 15).forEach { addVal ->
-                                AssistChip(
-                                    onClick = {
-                                        val current = logDurationText.toIntOrNull() ?: 0
-                                        logDurationText = (current + addVal).toString()
-                                    },
-                                    label = { Text("+${addVal} phút", fontSize = 11.sp) },
-                                    shape = RoundedCornerShape(8.dp),
-                                    colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
-                                )
-                            }
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Đúng mục tiêu", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        // Button 2: +0.5 km
+                        OutlinedButton(
+                            onClick = {
+                                val current = logDistanceText.toDoubleOrNull() ?: 0.0
+                                logDistanceText = String.format(java.util.Locale.US, "%.1f", current + 0.5)
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(0.9f)
+                        ) {
+                            Text("+0.5 km", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                        }
+
+                        // Button 3: +5 phút
+                        OutlinedButton(
+                            onClick = {
+                                val current = logDurationText.toIntOrNull() ?: 0
+                                logDurationText = (current + 5).toString()
+                            },
+                            shape = RoundedCornerShape(10.dp),
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
+                            modifier = Modifier.weight(0.9f)
+                        ) {
+                            Text("+5 phút", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
                         }
                     }
                     

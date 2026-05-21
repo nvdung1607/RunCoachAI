@@ -28,7 +28,7 @@ class PlanGeneratorTest {
         // Check if there is a race day workout at the end
         val raceWorkout = plan.last()
         assertEquals("RACE", raceWorkout.type)
-          assertEquals("RACE DAY! Chinh phục cự ly 21.0975 km", raceWorkout.description)
+        assertEquals("RACE DAY! Chinh phục cự ly 21.0975 km", raceWorkout.description)
         assertEquals("2026-08-22", raceWorkout.date)
 
         // Check that workouts have week numbers
@@ -98,6 +98,70 @@ class PlanGeneratorTest {
         for ((week, workouts) in runsByWeek2) {
             val runsCount = workouts.count { it.type !in listOf("REST", "CT") }
             assertTrue("Week $week should have at most 2 runs, got $runsCount", runsCount <= 2)
+        }
+    }
+
+    @Test
+    fun testPlanProgressiveLoadingAndRecovery() {
+        val startDate = LocalDate.of(2026, 5, 20)
+        val raceDate = LocalDate.of(2026, 8, 22) // ~13 weeks, totalWeeks = 14, peakWeek = 11
+        
+        val plan = PlanGenerator.generatePlan(
+            startDate = startDate,
+            raceDate = raceDate,
+            vdotScore = 40.0,
+            level = FitnessLevel.INTERMEDIATE,
+            targetDistance = 21
+        )
+
+        val longRuns = plan.filter { it.type.startsWith("LONG") }.associateBy { it.weekNumber }
+        
+        // Week 4 should be a recovery week (w % 4 == 0 && w < 11)
+        val week3Dist = longRuns[3]?.targetDistanceKm ?: 0.0
+        val week4Dist = longRuns[4]?.targetDistanceKm ?: 0.0
+        assertTrue("Week 4 should be a recovery week and be less than Week 3", week4Dist < week3Dist)
+        // Week 4 base is 11.75, 75% of 11.75 is 8.81 -> 8.8
+        assertEquals(8.8, week4Dist, 0.05)
+
+        // Week 8 should also be a recovery week
+        val week7Dist = longRuns[7]?.targetDistanceKm ?: 0.0
+        val week8Dist = longRuns[8]?.targetDistanceKm ?: 0.0
+        assertTrue("Week 8 should be a recovery week and be less than Week 7", week8Dist < week7Dist)
+        // Week 8 base is 16.0, 75% of 16.0 is 12.0
+        assertEquals(12.0, week8Dist, 0.05)
+
+        // Week 11 is Peak Week, should have peak distance (18.0 km)
+        val week11Dist = longRuns[11]?.targetDistanceKm ?: 0.0
+        assertEquals(18.0, week11Dist, 0.01)
+
+        // Week 12 (Taper 2) should be 80% of peak (14.4 km)
+        val week12Dist = longRuns[12]?.targetDistanceKm ?: 0.0
+        assertEquals(14.4, week12Dist, 0.01)
+
+        // Week 13 (Taper 1) should be 60% of peak (10.8 km)
+        val week13Dist = longRuns[13]?.targetDistanceKm ?: 0.0
+        assertEquals(10.8, week13Dist, 0.01)
+    }
+
+    @Test
+    fun testPreferredLongRunDay() {
+        val startDate = LocalDate.of(2026, 5, 20)
+        val raceDate = LocalDate.of(2026, 8, 22)
+        
+        val plan = PlanGenerator.generatePlan(
+            startDate = startDate,
+            raceDate = raceDate,
+            vdotScore = 40.0,
+            level = FitnessLevel.INTERMEDIATE,
+            targetDistance = 21,
+            maxSessionsPerWeek = 4,
+            preferredLongRunDay = java.time.DayOfWeek.SATURDAY
+        )
+
+        val longRuns = plan.filter { it.type.startsWith("LONG") }
+        for (run in longRuns) {
+            val date = LocalDate.parse(run.date)
+            assertEquals(java.time.DayOfWeek.SATURDAY, date.dayOfWeek)
         }
     }
 }

@@ -7,6 +7,7 @@ data class PaceZones(
     val easyPaceSec: Int,
     val tempoPaceSec: Int,
     val longPaceSec: Int,
+    val marathonPaceSec: Int,
     val intervalPaceSec: Int
 )
 
@@ -67,6 +68,11 @@ object VdotCalculator {
         val tempoSpeed = solveSpeedForVo2(tempoVo2)
         val tempoPace = (60000.0 / tempoSpeed).toInt().coerceIn(180, 600) // 3:00 to 10:00 /km
 
+        // Marathon pace intensity: ~75% VDOT
+        val marathonVo2 = vdot * 0.75
+        val marathonSpeed = solveSpeedForVo2(marathonVo2)
+        val marathonPace = (60000.0 / marathonSpeed).toInt().coerceIn(200, 660)
+
         // Interval run intensity: ~98% VDOT
         val intervalVo2 = vdot * 0.98
         val intervalSpeed = solveSpeedForVo2(intervalVo2)
@@ -76,6 +82,7 @@ object VdotCalculator {
             easyPaceSec = easyPace,
             tempoPaceSec = tempoPace,
             longPaceSec = longPace,
+            marathonPaceSec = marathonPace,
             intervalPaceSec = intervalPace
         )
     }
