@@ -50,6 +50,9 @@ import com.example.runcoach.data.health.HealthConnectManager
 import com.example.runcoach.data.local.db.WorkoutEntity
 import com.example.runcoach.data.local.preferences.UserPreferences
 import com.example.runcoach.domain.plan.VdotCalculator
+import com.example.runcoach.domain.plan.FitnessLevel
+import com.example.runcoach.domain.plan.PlanFeasibilityChecker
+import com.example.runcoach.domain.plan.FeasibilityReport
 import com.example.runcoach.presentation.MainViewModel
 import com.example.runcoach.ui.theme.*
 import kotlinx.coroutines.launch
@@ -354,13 +357,19 @@ fun OnboardingScreen(
 @Composable
 fun TestRunScreen(
     viewModel: MainViewModel,
-    onNavigateToDashboard: () -> Unit
+    onNavigateToDashboard: () -> Unit,
+    onNavigateToOnboarding: () -> Unit
 ) {
+    val userPrefs by viewModel.userPreferences.collectAsState()
     var minText by remember { mutableStateOf("") }
     var secText by remember { mutableStateOf("") }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val healthConnectManager = remember { HealthConnectManager(context) }
+
+    var showFeasibilityDialog by remember { mutableStateOf(false) }
+    var feasibilityReport by remember { mutableStateOf<FeasibilityReport?>(null) }
+    var pendingTotalSec by remember { mutableStateOf(0.0) }
 
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract()
@@ -551,14 +560,114 @@ fun TestRunScreen(
                         Toast.makeText(context, "Nhập thời gian hợp lệ cho 3km (6–40 phút)!", Toast.LENGTH_LONG).show()
                         return@Button
                     }
-                    viewModel.completeTestRun(totalSec)
-                    onNavigateToDashboard()
+
+                    val raceDateParsed = try {
+                        LocalDate.parse(userPrefs.raceDate)
+                    } catch (e: Exception) {
+                        LocalDate.now().plusWeeks(8)
+                    }
+                    val totalDays = ChronoUnit.DAYS.between(LocalDate.now(), raceDateParsed)
+                    val totalWeeks = (totalDays / 7.0).coerceAtLeast(4.0).toInt() + 1
+
+                    val level = when (userPrefs.fitnessLevel) {
+                        "INTERMEDIATE" -> FitnessLevel.INTERMEDIATE
+                        "ADVANCED" -> FitnessLevel.ADVANCED
+                        else -> FitnessLevel.BEGINNER
+                    }
+
+                    val report = PlanFeasibilityChecker.checkFeasibility(
+                        targetDistance = userPrefs.targetDistance,
+                        level = level,
+                        weeks = totalWeeks,
+                        time3kSeconds = totalSec
+                    )
+
+                    if (report.isFeasible) {
+                        viewModel.completeTestRun(totalSec)
+                        onNavigateToDashboard()
+                    } else {
+                        pendingTotalSec = totalSec
+                        feasibilityReport = report
+                        showFeasibilityDialog = true
+                    }
                 },
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
                 Text("Sinh Giáo Án & Bắt Đầu →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
+        }
+
+        if (showFeasibilityDialog && feasibilityReport != null) {
+            AlertDialog(
+                onDismissRequest = { showFeasibilityDialog = false },
+                icon = { Icon(Icons.Default.Warning, contentDescription = null, tint = ColorWarning, modifier = Modifier.size(36.dp)) },
+                title = {
+                    Text(
+                        text = "Cảnh Báo Tính Khả Thi",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        textAlign = TextAlign.Center
+                    )
+                },
+                text = {
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        feasibilityReport?.warningMessage?.let { warning ->
+                            Text(
+                                text = warning,
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.error,
+                                fontWeight = FontWeight.Medium,
+                                lineHeight = 20.sp
+                            )
+                        }
+                        feasibilityReport?.recommendation?.let { recommendation ->
+                            HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f))
+                            Text(
+                                text = recommendation,
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                                lineHeight = 18.sp
+                            )
+                        }
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            showFeasibilityDialog = false
+                            viewModel.completeTestRun(pendingTotalSec)
+                            onNavigateToDashboard()
+                        },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+                    ) {
+                        Text("Tôi vẫn muốn tiếp tục")
+                    }
+                },
+                dismissButton = {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        OutlinedButton(
+                            onClick = {
+                                showFeasibilityDialog = false
+                                onNavigateToOnboarding()
+                            }
+                        ) {
+                            Text("Điều chỉnh mục tiêu")
+                        }
+                        TextButton(
+                            onClick = { showFeasibilityDialog = false }
+                        ) {
+                            Text("Hủy", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                        }
+                    }
+                }
+            )
         }
     }
 }

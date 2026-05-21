@@ -245,6 +245,11 @@ class MainActivity : ComponentActivity() {
                                     navController.navigate("dashboard") {
                                         popUpTo("test_run") { inclusive = true }
                                     }
+                                },
+                                onNavigateToOnboarding = {
+                                    navController.navigate("onboarding") {
+                                        popUpTo(0) { inclusive = true }
+                                    }
                                 }
                             )
                         }

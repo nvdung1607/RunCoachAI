@@ -2,6 +2,7 @@ package com.example.runcoach
 
 import com.example.runcoach.domain.plan.FitnessLevel
 import com.example.runcoach.domain.plan.PlanGenerator
+import com.example.runcoach.domain.plan.PlanFeasibilityChecker
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
@@ -163,5 +164,66 @@ class PlanGeneratorTest {
             val date = LocalDate.parse(run.date)
             assertEquals(java.time.DayOfWeek.SATURDAY, date.dayOfWeek)
         }
+    }
+
+    @Test
+    fun testPlanFeasibilityChecker() {
+        val reportMarathonUnfeasible = PlanFeasibilityChecker.checkFeasibility(
+            targetDistance = 42,
+            level = FitnessLevel.BEGINNER,
+            weeks = 8,
+            time3kSeconds = 1200.0
+        )
+        assertNotNull(reportMarathonUnfeasible)
+        assertEquals(false, reportMarathonUnfeasible.isFeasible)
+        assertTrue(reportMarathonUnfeasible.warningMessage?.contains("bất khả thi") == true || reportMarathonUnfeasible.warningMessage?.contains("cực kỳ khó khả thi") == true)
+
+        val reportMarathonFeasible = PlanFeasibilityChecker.checkFeasibility(
+            targetDistance = 42,
+            level = FitnessLevel.ADVANCED,
+            weeks = 16,
+            time3kSeconds = 720.0
+        )
+        assertTrue(reportMarathonFeasible.isFeasible)
+
+        val reportHMUnfeasible = PlanFeasibilityChecker.checkFeasibility(
+            targetDistance = 21,
+            level = FitnessLevel.BEGINNER,
+            weeks = 4,
+            time3kSeconds = 1500.0
+        )
+        assertEquals(false, reportHMUnfeasible.isFeasible)
+
+        val report10kFeasible = PlanFeasibilityChecker.checkFeasibility(
+            targetDistance = 10,
+            level = FitnessLevel.BEGINNER,
+            weeks = 8,
+            time3kSeconds = 1200.0
+        )
+        assertTrue(report10kFeasible.isFeasible)
+    }
+
+    @Test
+    fun testBeginnerHabitBuildingWeeks() {
+        val startDate = LocalDate.of(2026, 5, 20)
+        val raceDate = LocalDate.of(2026, 8, 22)
+        
+        val plan = PlanGenerator.generatePlan(
+            startDate = startDate,
+            raceDate = raceDate,
+            vdotScore = 24.0,
+            level = FitnessLevel.BEGINNER,
+            targetDistance = 21
+        )
+
+        val longRuns = plan.filter { it.type.startsWith("LONG") }.associateBy { it.weekNumber }
+
+        assertEquals(5.0, longRuns[1]?.targetDistanceKm ?: 0.0, 0.01)
+        assertEquals(6.0, longRuns[2]?.targetDistanceKm ?: 0.0, 0.01)
+        assertEquals(7.0, longRuns[3]?.targetDistanceKm ?: 0.0, 0.01)
+
+        assertTrue(longRuns[1]?.instructions?.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") == true)
+        assertTrue(longRuns[2]?.instructions?.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") == true)
+        assertTrue(longRuns[3]?.instructions?.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") == true)
     }
 }
