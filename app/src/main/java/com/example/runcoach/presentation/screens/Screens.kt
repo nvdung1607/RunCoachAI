@@ -542,6 +542,7 @@ fun DashboardScreen(
     var showLogDialog by remember { mutableStateOf(false) }
     var logDistanceText by remember { mutableStateOf("") }
     var logDurationText by remember { mutableStateOf("") }
+    var selectedRpe by remember { mutableStateOf(3) }
     var showResetConfirm by remember { mutableStateOf(false) }
     var showNotifSettings by remember { mutableStateOf(false) }
     var showWorkoutDetails by remember { mutableStateOf<WorkoutEntity?>(null) }
@@ -884,7 +885,12 @@ fun DashboardScreen(
                             Spacer(modifier = Modifier.height(16.dp))
                             Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Button(
-                                    onClick = { showLogDialog = true },
+                                    onClick = {
+                                        logDistanceText = ""
+                                        logDurationText = ""
+                                        selectedRpe = 3
+                                        showLogDialog = true
+                                    },
                                     shape = RoundedCornerShape(12.dp),
                                     colors = ButtonDefaults.buttonColors(containerColor = wColor),
                                     modifier = Modifier.weight(1f)
@@ -972,28 +978,340 @@ fun DashboardScreen(
     }
 
     // Log workout dialog
-    if (showLogDialog && todayWorkout != null) {
-        Dialog(onDismissRequest = { showLogDialog = false }) {
+    val workout = todayWorkout
+    if (showLogDialog && workout != null) {
+        Dialog(
+            onDismissRequest = { showLogDialog = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
             Card(
-                shape = RoundedCornerShape(20.dp),
+                shape = RoundedCornerShape(28.dp),
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .wrapContentHeight()
             ) {
-                Column(modifier = Modifier.padding(24.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    Text("Ghi nhận bài chạy", fontSize = 18.sp, fontWeight = FontWeight.Bold)
-                    Spacer(modifier = Modifier.height(16.dp))
-                    OutlinedTextField(value = logDistanceText, onValueChange = { logDistanceText = it },
-                        label = { Text("Quãng đường (km)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth())
+                Column(
+                    modifier = Modifier
+                        .padding(24.dp)
+                        .verticalScroll(rememberScrollState()),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Header with Icon
+                    Box(
+                        modifier = Modifier
+                            .size(56.dp)
+                            .clip(RoundedCornerShape(16.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DirectionsRun,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(32.dp)
+                        )
+                    }
+                    
                     Spacer(modifier = Modifier.height(12.dp))
-                    OutlinedTextField(value = logDurationText, onValueChange = { logDurationText = it },
-                        label = { Text("Thời gian (phút)") },
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                        modifier = Modifier.fillMaxWidth())
+                    
+                    Text(
+                        text = "Ghi nhận bài chạy",
+                        fontSize = 20.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    
+                    Spacer(modifier = Modifier.height(4.dp))
+                    
+                    Text(
+                        text = "Nhập kết quả thực tế bài tập hôm nay",
+                        fontSize = 12.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                    
+                    Spacer(modifier = Modifier.height(16.dp))
+                    
+                    // Target Workout Summary Badge
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Flag,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "Mục tiêu: ${workout.targetDistanceKm} km @ ${VdotCalculator.formatPace(workout.targetPaceSec)} min/km",
+                                fontSize = 12.5.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(18.dp))
+                    
+                    // Input: Distance
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = logDistanceText,
+                            onValueChange = { logDistanceText = it },
+                            label = { Text("Quãng đường thực tế (km)") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Map,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                )
+                            },
+                            placeholder = { Text("Ví dụ: ${workout.targetDistanceKm}") },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Spacer(modifier = Modifier.height(6.dp))
+                        
+                        // Distance presets Row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            AssistChip(
+                                onClick = { logDistanceText = workout.targetDistanceKm.toString() },
+                                label = { Text("Đúng mục tiêu", fontSize = 11.sp) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            )
+                            listOf(0.5, 1.0, 2.0).forEach { addVal ->
+                                AssistChip(
+                                    onClick = {
+                                        val current = logDistanceText.toDoubleOrNull() ?: 0.0
+                                        logDistanceText = String.format(java.util.Locale.US, "%.1f", current + addVal)
+                                    },
+                                    label = { Text("+${addVal} km", fontSize = 11.sp) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    // Input: Duration
+                    Column(modifier = Modifier.fillMaxWidth()) {
+                        OutlinedTextField(
+                            value = logDurationText,
+                            onValueChange = { logDurationText = it },
+                            label = { Text("Thời gian chạy thực tế (phút)") },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.Timer,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary.copy(alpha = 0.7f)
+                                )
+                            },
+                            placeholder = {
+                                val estMin = ((workout.targetDistanceKm * workout.targetPaceSec) / 60.0).toInt()
+                                Text("Ví dụ: $estMin")
+                            },
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                        
+                        Spacer(modifier = Modifier.height(6.dp))
+                        
+                        // Duration presets Row
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            val targetDurationMin = ((workout.targetDistanceKm * workout.targetPaceSec) / 60.0).toInt()
+                            AssistChip(
+                                onClick = { logDurationText = targetDurationMin.toString() },
+                                label = { Text("Đúng mục tiêu", fontSize = 11.sp) },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                            )
+                            listOf(5, 10, 15).forEach { addVal ->
+                                AssistChip(
+                                    onClick = {
+                                        val current = logDurationText.toIntOrNull() ?: 0
+                                        logDurationText = (current + addVal).toString()
+                                    },
+                                    label = { Text("+${addVal} phút", fontSize = 11.sp) },
+                                    shape = RoundedCornerShape(8.dp),
+                                    colors = AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f))
+                                )
+                            }
+                        }
+                    }
+                    
+                    // Real-time Pace Calculation Feedback
+                    val dist = logDistanceText.toDoubleOrNull() ?: 0.0
+                    val dur = logDurationText.toDoubleOrNull() ?: 0.0
+                    if (dist > 0.0 && dur > 0.0) {
+                        val paceSec = (dur * 60) / dist
+                        val paceStr = VdotCalculator.formatPace(paceSec.toInt())
+                        
+                        val speedDiff = paceSec - workout.targetPaceSec
+                        val (paceMsg, paceColor) = when {
+                            speedDiff < -15 -> "Nhanh hơn mục tiêu khá nhiều! Hãy cẩn thận giữ sức. 🔥" to ColorTempo
+                            speedDiff > 25 -> "Chạy thả lỏng, nhịp tim an toàn tốt. 🐢" to ColorEasy
+                            else -> "Nhịp độ lý tưởng, bám rất sát mục tiêu! 🎯" to ColorCompleted
+                        }
+                        
+                        Spacer(modifier = Modifier.height(16.dp))
+                        
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = paceColor.copy(alpha = 0.08f)),
+                            border = BorderStroke(1.dp, paceColor.copy(alpha = 0.2f)),
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally
+                            ) {
+                                Row(verticalAlignment = Alignment.CenterVertically) {
+                                    Icon(
+                                        imageVector = Icons.Default.Speed,
+                                        contentDescription = null,
+                                        tint = paceColor,
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(6.dp))
+                                    Text(
+                                        text = "Pace trung bình thực tế: $paceStr /km",
+                                        fontSize = 13.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = paceColor
+                                    )
+                                }
+                                Spacer(modifier = Modifier.height(4.dp))
+                                Text(
+                                    text = paceMsg,
+                                    fontSize = 11.5.sp,
+                                    textAlign = TextAlign.Center,
+                                    color = paceColor.copy(alpha = 0.85f)
+                                )
+                            }
+                        }
+                    }
+                    
+                    Spacer(modifier = Modifier.height(18.dp))
+                    HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                    Spacer(modifier = Modifier.height(14.dp))
+                    
+                    // RPE Rating (Perceived Effort)
+                    Text(
+                        text = "Mức độ gắng sức cảm nhận (RPE)",
+                        fontSize = 13.5.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(modifier = Modifier.height(10.dp))
+                    
+                    val rpeOptions = listOf(
+                        1 to ("😊" to "Nhẹ nhàng"),
+                        2 to ("🏃‍♂️" to "Thoải mái"),
+                        3 to ("👍" to "Vừa sức"),
+                        4 to ("🥵" to "Mệt mỏi"),
+                        5 to ("☠️" to "Kiệt sức")
+                    )
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        rpeOptions.forEach { (rating, pair) ->
+                            val (emoji, label) = pair
+                            val isSelected = selectedRpe == rating
+                            
+                            val btnBg = if (isSelected) {
+                                when(rating) {
+                                    1, 2 -> ColorEasy.copy(alpha = 0.15f)
+                                    3 -> ColorCompleted.copy(alpha = 0.15f)
+                                    4 -> ColorWarning.copy(alpha = 0.15f)
+                                    else -> ColorLong.copy(alpha = 0.15f)
+                                }
+                            } else {
+                                MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f)
+                            }
+                            
+                            val btnBorderColor = if (isSelected) {
+                                when(rating) {
+                                    1, 2 -> ColorEasy
+                                    3 -> ColorCompleted
+                                    4 -> ColorWarning
+                                    else -> ColorLong
+                                }
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f)
+                            }
+                            
+                            val textColor = if (isSelected) {
+                                when(rating) {
+                                    1, 2 -> ColorEasy
+                                    3 -> ColorCompleted
+                                    4 -> ColorWarning
+                                    else -> ColorLong
+                                }
+                            } else {
+                                MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                            }
+
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(btnBg)
+                                    .border(1.dp, btnBorderColor, RoundedCornerShape(12.dp))
+                                    .clickable { selectedRpe = rating }
+                                    .padding(vertical = 8.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                    Text(text = emoji, fontSize = 20.sp)
+                                    Spacer(modifier = Modifier.height(2.dp))
+                                    Text(
+                                        text = label,
+                                        fontSize = 9.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = textColor
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    
                     Spacer(modifier = Modifier.height(24.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedButton(onClick = { showLogDialog = false }, shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)) { Text("Hủy") }
+                    
+                    // Action Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { showLogDialog = false },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                        ) {
+                            Text("Hủy", fontWeight = FontWeight.Bold)
+                        }
                         Button(
                             onClick = {
                                 val distance = logDistanceText.toDoubleOrNull() ?: 0.0
@@ -1006,8 +1324,13 @@ fun DashboardScreen(
                                 showLogDialog = false
                                 Toast.makeText(context, "Đã ghi nhận bài chạy! 🎉", Toast.LENGTH_SHORT).show()
                             },
-                            shape = RoundedCornerShape(12.dp), modifier = Modifier.weight(1f)
-                        ) { Text("Lưu") }
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier
+                                .weight(1f)
+                                .height(48.dp)
+                        ) {
+                            Text("Lưu kết quả", fontWeight = FontWeight.Bold)
+                        }
                     }
                 }
             }
