@@ -25,6 +25,8 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -182,7 +184,8 @@ class MainActivity : ComponentActivity() {
                                     )
                                 }
                             }
-                        }
+                        },
+                        contentWindowInsets = WindowInsets(0.dp)
                     ) { innerPadding ->
                         NavHost(
                             modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),

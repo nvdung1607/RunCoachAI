@@ -15,7 +15,12 @@ object AppLogger {
     fun w(message: String) = log(Log.WARN, message)
     fun e(message: String, throwable: Throwable? = null) {
         if (throwable != null) {
-            log(Log.ERROR, "$message\n${Log.getStackTraceString(throwable)}")
+            val stackTraceStr = try {
+                Log.getStackTraceString(throwable)
+            } catch (e: RuntimeException) {
+                throwable.stackTraceToString()
+            }
+            log(Log.ERROR, "$message\n$stackTraceStr")
         } else {
             log(Log.ERROR, message)
         }
@@ -37,6 +42,18 @@ object AppLogger {
             GLOBAL_TAG
         }
 
-        Log.println(priority, tag, message)
+        try {
+            Log.println(priority, tag, message)
+        } catch (e: RuntimeException) {
+            val levelChar = when (priority) {
+                Log.VERBOSE -> "V"
+                Log.DEBUG -> "D"
+                Log.INFO -> "I"
+                Log.WARN -> "W"
+                Log.ERROR -> "E"
+                else -> "I"
+            }
+            println("[$levelChar][$tag]: $message")
+        }
     }
 }
