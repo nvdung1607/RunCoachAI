@@ -15,6 +15,8 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.*
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.withTimeout
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -98,19 +100,38 @@ class MainActivity : ComponentActivity() {
             val isHcAvailable = hcStatus == HealthConnectClient.SDK_AVAILABLE
 
             LaunchedEffect(Unit) {
-                // Force suspension until DataStore finishes loading preference files from disk
-                val repository = (application as RunCoachApplication).userPreferencesRepository
-                val initialPrefs = repository.userPreferencesFlow.first()
+                try {
+                    // Force suspension until DataStore finishes loading preference files from disk
+                    val repository = (application as RunCoachApplication).userPreferencesRepository
+                    val initialPrefs = repository.userPreferencesFlow.first()
 
-                hcPermissionsGranted = healthConnectManager.hasPermissions()
-                hasCheckedPermissions = true
+                    // Wrap HC permissions check in a timeout to prevent hanging
+                    // if Health Connect process is slow to respond
+                    try {
+                        withTimeout(3000L) {
+                            hcPermissionsGranted = healthConnectManager.hasPermissions()
+                        }
+                    } catch (e: TimeoutCancellationException) {
+                        com.example.runcoach.utils.AppLogger.w("HC permissions check timed out, defaulting to false")
+                        hcPermissionsGranted = false
+                    } catch (e: Exception) {
+                        com.example.runcoach.utils.AppLogger.w("HC permissions check failed: ${e.message}")
+                        hcPermissionsGranted = false
+                    }
+                    hasCheckedPermissions = true
 
-                val isHcOk = hcPermissionsGranted || !isHcAvailable
-                if (hasNotificationPermission && isHcOk && !initialPrefs.hasCompletedPermissionSetup && initialPrefs.raceDate.isNotEmpty()) {
-                    com.example.runcoach.utils.AppLogger.d("All permissions already granted. Auto-completing permission setup.")
-                    viewModel.completePermissionSetup()
+                    val isHcOk = hcPermissionsGranted || !isHcAvailable
+                    if (hasNotificationPermission && isHcOk && !initialPrefs.hasCompletedPermissionSetup && initialPrefs.raceDate.isNotEmpty()) {
+                        com.example.runcoach.utils.AppLogger.d("All permissions already granted. Auto-completing permission setup.")
+                        viewModel.completePermissionSetup()
+                    }
+                } catch (e: Exception) {
+                    com.example.runcoach.utils.AppLogger.e("LaunchedEffect init failed", e)
+                    hasCheckedPermissions = true
+                } finally {
+                    // Always mark loading complete so the screen is shown
+                    isInitialLoadComplete = true
                 }
-                isInitialLoadComplete = true
             }
 
             val isDarkTheme = when (userPrefs.themeMode) {
