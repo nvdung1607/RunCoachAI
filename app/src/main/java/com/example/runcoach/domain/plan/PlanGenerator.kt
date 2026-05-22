@@ -23,7 +23,9 @@ enum class Phase {
 }
 
 enum class WorkoutRole {
-    EASY_1, EASY_2, EASY_3, QUALITY, LONG, REST
+    EASY_1, EASY_2, EASY_3, QUALITY, LONG, REST,
+    RECOVERY,    // Light recovery run (after Long Run)
+    REPETITION   // Short fast repeats (ADVANCED only)
 }
 
 object PlanGenerator {
@@ -85,13 +87,17 @@ object PlanGenerator {
             4 -> {
                 schedule[getDay(-5)] = WorkoutRole.EASY_1
                 schedule[getDay(-3)] = WorkoutRole.QUALITY
-                schedule[getDay(-2)] = WorkoutRole.EASY_2
+                // Day after Long Run = Recovery (instead of EASY_2)
+                val recoveryDay4 = getDay(1)
+                if (recoveryDay4 != longRunDay) schedule[recoveryDay4] = WorkoutRole.RECOVERY
             }
             else -> { // 5 or more
                 schedule[getDay(-6)] = WorkoutRole.EASY_3
                 schedule[getDay(-5)] = WorkoutRole.EASY_1
                 schedule[getDay(-3)] = WorkoutRole.QUALITY
-                schedule[getDay(-2)] = WorkoutRole.EASY_2
+                // Day after Long Run = Recovery
+                val recoveryDay5 = getDay(1)
+                if (recoveryDay5 != longRunDay) schedule[recoveryDay5] = WorkoutRole.RECOVERY
             }
         }
         return schedule
@@ -104,7 +110,9 @@ object PlanGenerator {
         level: FitnessLevel,
         targetDistance: Int = 21,
         maxSessionsPerWeek: Int = 3,
-        preferredLongRunDay: DayOfWeek = DayOfWeek.SUNDAY
+        preferredLongRunDay: DayOfWeek = DayOfWeek.SUNDAY,
+        age: Int = 25,           // Age-based recovery adjustments
+        gender: String = "MALE" // Reserved for future use
     ): List<WorkoutEntity> {
         val workouts = mutableListOf<WorkoutEntity>()
         val totalDays = ChronoUnit.DAYS.between(startDate, raceDate)
@@ -138,6 +146,13 @@ object PlanGenerator {
         val config = getFitnessConfig(targetDistance, level)
         val longRunDistances = DoubleArray(totalWeeks + 1)
         val baseDist = DoubleArray(totalWeeks + 1)
+
+        // Age-based recovery factor: runners 40+ need more recovery
+        val ageRecoveryFactor = when {
+            age >= 50 -> 0.85
+            age >= 40 -> 0.92
+            else -> 1.0
+        }
 
         for (w in 1..totalWeeks) {
             if (w == totalWeeks) {
@@ -218,6 +233,11 @@ object PlanGenerator {
             
             var finalDist = baseDist[w]
             if (isRecovery) finalDist *= 0.75
+            // Apply age-based recovery factor in regular (non-taper, non-race) weeks
+            val weekPhase = getPhase(w, baseWeeks, buildWeeks, peakWeeks)
+            if (weekPhase != Phase.TAPER) {
+                finalDist = (finalDist * ageRecoveryFactor).coerceAtLeast(2.0)
+            }
             longRunDistances[w] = (Math.round(finalDist * 10.0) / 10.0).coerceAtLeast(2.0)
         }
 
@@ -337,6 +357,17 @@ object PlanGenerator {
                         }
                     }
                 }
+                WorkoutRole.RECOVERY -> {
+                    val recDist = (lDist * 0.35).coerceAtLeast(2.0)
+                    createRecoveryRun(currentDate, weekNumber, recDist, (paceZones.easyPaceSec * 1.1).toInt(), level, isVeryBeginner)
+                }
+                WorkoutRole.REPETITION -> {
+                    if (level == FitnessLevel.ADVANCED && phase == Phase.BUILD) {
+                        createRepetitionRun(currentDate, weekNumber, (lDist * 0.4).coerceAtLeast(2.0), paceZones.intervalPaceSec)
+                    } else {
+                        createEasyRun(currentDate, weekNumber, (lDist * 0.4).coerceAtLeast(2.0), paceZones.easyPaceSec, level, isVeryBeginner, "Chạy Easy nhẹ nhàng")
+                    }
+                }
             }
             workouts.add(workout)
         }
@@ -382,5 +413,32 @@ object PlanGenerator {
 
     private fun createRestWorkout(date: LocalDate, weekNumber: Int): WorkoutEntity {
         return WorkoutEntity(date = date.toString(), weekNumber = weekNumber, type = "REST", targetDistanceKm = 0.0, targetPaceSec = 0, description = "Nghỉ ngơi hoàn toàn", instructions = "Cơ thể phục hồi và phát triển trong những ngày nghỉ.", isCompleted = false)
+    }
+
+    private fun createRecoveryRun(date: LocalDate, weekNumber: Int, distance: Double, paceSec: Int, level: FitnessLevel, isVeryBeginner: Boolean): WorkoutEntity {
+        val dist = Math.round(distance * 10.0) / 10.0
+        val baseInstructions = getRunWalkInstructions(level, weekNumber, isVeryBeginner)
+        val instructions = if (level == FitnessLevel.BEGINNER && weekNumber <= 3) {
+            "Giai đoạn tạo thói quen. Chạy rất nhẹ nhàng hoặc đi bộ thoải mái. $baseInstructions"
+        } else {
+            "Ngày hồi phục: Chạy rất chậm, thoải mái (Pace chậm hơn Easy khoảng 30-45 giây/km). Mục tiêu là kích thích tuần hoàn máu, KHÔNG tập lực. $baseInstructions"
+        }
+        return WorkoutEntity(
+            date = date.toString(), weekNumber = weekNumber, type = "RECOVERY",
+            targetDistanceKm = dist, targetPaceSec = paceSec,
+            description = "Chạy phục hồi (Recovery) (${dist}km)",
+            instructions = instructions, isCompleted = false
+        )
+    }
+
+    private fun createRepetitionRun(date: LocalDate, weekNumber: Int, distance: Double, paceSec: Int): WorkoutEntity {
+        val dist = Math.round(distance * 10.0) / 10.0
+        return WorkoutEntity(
+            date = date.toString(), weekNumber = weekNumber, type = "REPETITION",
+            targetDistanceKm = dist, targetPaceSec = paceSec,
+            description = "Chạy Repetition tốc độ cao (${dist}km)",
+            instructions = "Khởi động 1.5km Easy. Chạy 6-8 lần đoạn 200-400m ở tốc độ rất nhanh (Repetition Pace), nghỉ đi bộ 2-3 phút giữa các đoạn. Thả lỏng 1km cuối.",
+            isCompleted = false
+        )
     }
 }

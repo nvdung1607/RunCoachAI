@@ -95,7 +95,13 @@ RunCoach AI là ứng dụng Android thông minh giúp thiết kế và quản l
 
 ## 📝 Thông Tin Phiên Bản
 
-*   **Phiên bản hiện tại:** v1.3
+*   **Phiên bản hiện tại:** v1.4
+    *   *Nâng cấp v1.4:*
+        *   **Popup chi tiết bài tập:** Xem chi tiết đầy đủ thông tin về bài chạy (hướng dẫn, cự ly/pace mục tiêu, kết quả thực tế, ghi chú cá nhân) trực tiếp từ Lịch sử bằng popup Material 3.
+        *   **Thuật toán giáo án nâng cao:** Sinh thêm nhiều loại bài tập phong phú (Recovery Run, Repetition Run), cá nhân hóa theo giới tính, độ tuổi và mức độ vận động (runner lớn tuổi được tính hệ số phục hồi cao hơn).
+        *   **Hướng dẫn nhập 3km trực quan:** Tích hợp bảng tra cứu pace, dialog hướng dẫn test 3km và tư vấn mục tiêu cho người mới bắt đầu.
+        *   **Thiết kế giáo án thủ công & xuất file:** Người dùng tự tạo, sửa, xóa bài tập và xuất giáo án ra định dạng CSV/PDF để chia sẻ.
+        *   **Đồng bộ Health Connect thông minh:** Quét dữ liệu 3 ngày gần nhất, khớp session với bài tập chưa hoàn thành trong khoảng ±1 ngày.
     *   *Nâng cấp v1.3:*
         *   **Bắt đầu bài tập hôm nay:** Buổi tập đầu tiên luôn được lên lịch vào ngày bắt đầu giáo án (hôm nay) thay vì là ngày nghỉ (REST).
         *   **Khởi đầu nhẹ nhàng:** Bắt buộc 3 buổi tập tích lũy đầu tiên của giáo án luôn là bài chạy nhẹ nhàng (EASY run), tránh gặp bài chạy dài (LONG run) hay bài chất lượng (QUALITY run) quá sớm ở tuần đầu tiên.

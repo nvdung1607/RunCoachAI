@@ -18,5 +18,7 @@ data class WorkoutEntity(
     val actualDistanceKm: Double = 0.0,
     val actualDurationMin: Double = 0.0,
     val completedDate: String? = null,
-    val syncSource: String? = null    // "HEALTH_CONNECT", "MANUAL", null
+    val syncSource: String? = null,   // "HEALTH_CONNECT", "MANUAL", null
+    val notes: String = "",           // user-written notes for this workout
+    val isCustom: Boolean = false     // true if user-created (not AI-generated)
 )

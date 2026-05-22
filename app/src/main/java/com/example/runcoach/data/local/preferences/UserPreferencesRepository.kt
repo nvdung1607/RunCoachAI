@@ -25,7 +25,10 @@ data class UserPreferences(
     val notificationMinute: Int,       // 0-59, default 0
     val targetDistance: Int,           // 5, 10, 21, 42 km
     val maxSessionsPerWeek: Int,       // 2, 3, 4, 5 days per week
-    val hasCompletedPermissionSetup: Boolean // true when permission onboarding screen is completed
+    val hasCompletedPermissionSetup: Boolean, // true when permission onboarding screen is completed
+    val gender: String = "MALE",       // "MALE", "FEMALE", "OTHER"
+    val age: Int = 25,                 // user age
+    val activityLevel: String = "SEDENTARY" // "SEDENTARY", "ACTIVE", "RUNNER"
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -45,6 +48,9 @@ class UserPreferencesRepository(private val context: Context) {
         val TARGET_DISTANCE = intPreferencesKey("target_distance")
         val MAX_SESSIONS_PER_WEEK = intPreferencesKey("max_sessions_per_week")
         val HAS_COMPLETED_PERMISSION_SETUP = booleanPreferencesKey("has_completed_permission_setup")
+        val GENDER = stringPreferencesKey("gender")
+        val AGE = intPreferencesKey("age")
+        val ACTIVITY_LEVEL = stringPreferencesKey("activity_level")
     }
 
     val userPreferencesFlow: Flow<UserPreferences> = context.dataStore.data
@@ -70,16 +76,30 @@ class UserPreferencesRepository(private val context: Context) {
                 notificationMinute = preferences[PreferencesKeys.NOTIFICATION_MINUTE] ?: 0,
                 targetDistance = preferences[PreferencesKeys.TARGET_DISTANCE] ?: 21,
                 maxSessionsPerWeek = preferences[PreferencesKeys.MAX_SESSIONS_PER_WEEK] ?: 3,
-                hasCompletedPermissionSetup = preferences[PreferencesKeys.HAS_COMPLETED_PERMISSION_SETUP] ?: false
+                hasCompletedPermissionSetup = preferences[PreferencesKeys.HAS_COMPLETED_PERMISSION_SETUP] ?: false,
+                gender = preferences[PreferencesKeys.GENDER] ?: "MALE",
+                age = preferences[PreferencesKeys.AGE] ?: 25,
+                activityLevel = preferences[PreferencesKeys.ACTIVITY_LEVEL] ?: "SEDENTARY"
             )
         }
 
-    suspend fun saveOnboardingPreferences(raceDate: String, fitnessLevel: String, targetDistance: Int, maxSessions: Int) {
+    suspend fun saveOnboardingPreferences(
+        raceDate: String,
+        fitnessLevel: String,
+        targetDistance: Int,
+        maxSessions: Int,
+        gender: String,
+        age: Int,
+        activityLevel: String
+    ) {
         context.dataStore.edit { preferences ->
             preferences[PreferencesKeys.RACE_DATE] = raceDate
             preferences[PreferencesKeys.FITNESS_LEVEL] = fitnessLevel
             preferences[PreferencesKeys.TARGET_DISTANCE] = targetDistance
             preferences[PreferencesKeys.MAX_SESSIONS_PER_WEEK] = maxSessions
+            preferences[PreferencesKeys.GENDER] = gender
+            preferences[PreferencesKeys.AGE] = age
+            preferences[PreferencesKeys.ACTIVITY_LEVEL] = activityLevel
         }
     }
 

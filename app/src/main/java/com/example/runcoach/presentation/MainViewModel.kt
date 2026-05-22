@@ -35,7 +35,7 @@ class MainViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5000),
-            initialValue = UserPreferences("", "BEGINNER", 0f, false, 480, 420, 510, "SYSTEM", true, 6, 0, 21, 3, false)
+            initialValue = UserPreferences("", "BEGINNER", 0f, false, 480, 420, 510, "SYSTEM", true, 6, 0, 21, 3, false, "MALE", 25, "SEDENTARY")
         )
 
     val workouts: StateFlow<List<WorkoutEntity>> = workoutDao.getAllWorkoutsFlow()
@@ -52,10 +52,10 @@ class MainViewModel(
             initialValue = null
         )
 
-    fun saveOnboarding(raceDate: String, fitnessLevel: String, targetDistance: Int, maxSessions: Int) {
+    fun saveOnboarding(raceDate: String, fitnessLevel: String, targetDistance: Int, maxSessions: Int, gender: String, age: Int, activityLevel: String) {
         com.example.runcoach.utils.AppLogger.d("User saved onboarding: raceDate=$raceDate, level=$fitnessLevel, target=${targetDistance}km, sessions=$maxSessions")
         viewModelScope.launch {
-            prefsRepository.saveOnboardingPreferences(raceDate, fitnessLevel, targetDistance, maxSessions)
+            prefsRepository.saveOnboardingPreferences(raceDate, fitnessLevel, targetDistance, maxSessions, gender, age, activityLevel)
         }
     }
 
@@ -90,7 +90,9 @@ class MainViewModel(
                 vdotScore = vdot,
                 level = level,
                 targetDistance = prefs.targetDistance,
-                maxSessionsPerWeek = prefs.maxSessionsPerWeek
+                maxSessionsPerWeek = prefs.maxSessionsPerWeek,
+                age = prefs.age,
+                gender = prefs.gender
             )
 
             workoutDao.insertAll(generatedList)
@@ -186,72 +188,150 @@ class MainViewModel(
         WorkManager.getInstance(getApplication()).enqueue(syncRequest)
     }
 
-    fun syncTodayWorkout(onResult: (String) -> Unit) {
-        com.example.runcoach.utils.AppLogger.d("Starting syncTodayWorkout for today's specific data")
+    fun syncRecentWorkouts(onResult: (String) -> Unit) {
+        com.example.runcoach.utils.AppLogger.d("Starting syncRecentWorkouts for last 3 days")
         viewModelScope.launch {
             try {
                 val app = getApplication<RunCoachApplication>()
                 val healthConnectManager = com.example.runcoach.data.health.HealthConnectManager(app)
                 
                 if (!healthConnectManager.hasPermissions()) {
-                    com.example.runcoach.utils.AppLogger.w("syncTodayWorkout aborted: Health Connect permissions are missing")
                     onResult("Chưa cấp quyền Health Connect.")
-                    return@launch
-                }
-
-                val todayDateStr = java.time.LocalDate.now().toString()
-                val workout = workoutDao.getWorkoutByDate(todayDateStr)
-
-                if (workout == null || workout.type in listOf("REST", "CT")) {
-                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: No running workout found for today ($todayDateStr)")
-                    onResult("Hôm nay không có bài tập chạy cần đồng bộ.")
-                    return@launch
-                }
-                
-                if (workout.isCompleted) {
-                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: Workout already completed. Skipping update.")
-                    onResult("Bài tập hôm nay đã được hoàn thành trước đó.")
-                    // Still can sync to update data if needed, but keeping it simple
                     return@launch
                 }
 
                 val zoneId = java.time.ZoneId.systemDefault()
                 val today = java.time.LocalDate.now()
-                val startInstant = java.time.ZonedDateTime.of(today.atStartOfDay(), zoneId).toInstant()
+                val windowStart = today.minusDays(2)
+                
+                val startInstant = java.time.ZonedDateTime.of(windowStart.atStartOfDay(), zoneId).toInstant()
                 val endInstant = java.time.ZonedDateTime.of(today.plusDays(1).atStartOfDay(), zoneId).toInstant()
 
-                val sessions = healthConnectManager.getRunningSessions(startInstant, endInstant)
-                com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: Fetched ${sessions.size} running sessions from Health Connect")
+                val allSessions = healthConnectManager.getRunningSessions(startInstant, endInstant)
                 
-                if (sessions.isEmpty()) {
-                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: No sessions found")
-                    onResult("Không tìm thấy dữ liệu chạy bộ của hôm nay trên Health Connect.")
+                if (allSessions.isEmpty()) {
+                    onResult("Không tìm thấy dữ liệu chạy bộ nào trong 3 ngày gần nhất trên Health Connect.")
                     return@launch
                 }
 
-                val totalDistance = sessions.sumOf { it.distanceKm }
-                val totalDuration = sessions.sumOf { it.durationMinutes }
+                // Group sessions by date
+                val sessionsByDate = allSessions.groupBy { session ->
+                    session.startTime.atZone(zoneId).toLocalDate()
+                }
+                
+                val runningTypes = setOf("EASY", "LONG", "TEMPO", "RACE", "INTERVAL", "REPETITION", "RECOVERY")
+                var syncedCount = 0
+                var totalSyncedKm = 0.0
 
-                if (totalDistance >= 0.1) { // lowered threshold to 100m for better UX testing
-                    com.example.runcoach.utils.AppLogger.d("syncTodayWorkout: Success! Synced ${totalDistance}km")
-                    val updatedWorkout = workout.copy(
-                        isCompleted = true,
-                        actualDistanceKm = totalDistance,
-                        actualDurationMin = totalDuration,
-                        completedDate = sessions.first().startTime.toString(),
-                        syncSource = "HEALTH_CONNECT"
+                for ((sessionDate, sessions) in sessionsByDate) {
+                    val totalDistance = sessions.sumOf { it.distanceKm }
+                    val totalDuration = sessions.sumOf { it.durationMinutes }
+                    
+                    if (totalDistance < 0.1) continue
+
+                    // Find matching uncompleted workout within +-1 day
+                    val candidateDates = listOf(
+                        sessionDate.toString(),
+                        sessionDate.minusDays(1).toString(),
+                        sessionDate.plusDays(1).toString()
                     )
-                    workoutDao.update(updatedWorkout)
-                    onResult("Đã đồng bộ thành công! ($totalDistance km)")
+                    
+                    for (dateStr in candidateDates) {
+                        val workout = workoutDao.getWorkoutByDate(dateStr)
+                        if (workout != null && !workout.isCompleted && workout.type in runningTypes) {
+                            val updated = workout.copy(
+                                isCompleted = true,
+                                actualDistanceKm = totalDistance,
+                                actualDurationMin = totalDuration,
+                                completedDate = sessions.first().startTime.toString(),
+                                syncSource = "HEALTH_CONNECT"
+                            )
+                            workoutDao.update(updated)
+                            syncedCount++
+                            totalSyncedKm += totalDistance
+                            com.example.runcoach.utils.AppLogger.i(
+                                "syncRecentWorkouts: Synced ${totalDistance}km from $sessionDate to workout on $dateStr"
+                            )
+                            break // Found a match for this session, move to next
+                        }
+                    }
+                }
+
+                if (syncedCount > 0) {
+                    onResult("Đã đồng bộ thành công $syncedCount buổi tập! (Tổng: ${"%,.1f".format(totalSyncedKm)} km)")
                 } else {
-                    com.example.runcoach.utils.AppLogger.w("syncTodayWorkout: Found data but distance too short ($totalDistance km)")
-                    onResult("Tìm thấy dữ liệu nhưng quãng đường quá ngắn (<0.1km).")
+                    onResult("Tìm thấy ${allSessions.size} buổi chạy nhưng không khớp với bài tập nào trong giáo án.")
                 }
 
             } catch (e: Exception) {
-                com.example.runcoach.utils.AppLogger.e("syncTodayWorkout crashed", e)
-                e.printStackTrace()
+                com.example.runcoach.utils.AppLogger.e("syncRecentWorkouts crashed", e)
                 onResult("Đã xảy ra lỗi khi đồng bộ: ${e.message}")
+            }
+        }
+    }
+
+    // Backward compat alias
+    fun syncTodayWorkout(onResult: (String) -> Unit) = syncRecentWorkouts(onResult)
+
+    fun upsertWorkout(workout: WorkoutEntity) {
+        viewModelScope.launch {
+            workoutDao.insert(workout)
+        }
+    }
+
+    fun deleteWorkout(workout: WorkoutEntity) {
+        viewModelScope.launch {
+            workoutDao.delete(workout)
+        }
+    }
+
+    fun exportPlanToCsv(context: android.content.Context, onResult: (android.net.Uri?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val list = workouts.value
+                val csvContent = com.example.runcoach.domain.plan.PlanExporter.exportToCsv(list)
+                
+                val cacheDir = java.io.File(context.cacheDir, "exports")
+                if (!cacheDir.exists()) cacheDir.mkdirs()
+                
+                val file = java.io.File(cacheDir, "RunCoach_Plan_${System.currentTimeMillis()}.csv")
+                file.writeText(csvContent)
+                
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "com.example.runcoach.fileprovider",
+                    file
+                )
+                onResult(uri)
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("exportPlanToCsv failed", e)
+                onResult(null)
+            }
+        }
+    }
+
+    fun exportPlanToPdf(context: android.content.Context, onResult: (android.net.Uri?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val list = workouts.value
+                
+                val cacheDir = java.io.File(context.cacheDir, "exports")
+                if (!cacheDir.exists()) cacheDir.mkdirs()
+                
+                val file = java.io.File(cacheDir, "RunCoach_Plan_${System.currentTimeMillis()}.pdf")
+                file.outputStream().use { os ->
+                    com.example.runcoach.domain.plan.PlanExporter.exportToPdf(list, os)
+                }
+                
+                val uri = androidx.core.content.FileProvider.getUriForFile(
+                    context,
+                    "com.example.runcoach.fileprovider",
+                    file
+                )
+                onResult(uri)
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("exportPlanToPdf failed", e)
+                onResult(null)
             }
         }
     }

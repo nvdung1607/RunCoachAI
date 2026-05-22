@@ -15,6 +15,9 @@ interface WorkoutDao {
     @Update
     suspend fun update(workout: WorkoutEntity)
 
+    @Delete
+    suspend fun delete(workout: WorkoutEntity)
+
     @Query("SELECT * FROM workouts WHERE date = :date LIMIT 1")
     suspend fun getWorkoutByDate(date: String): WorkoutEntity?
 
@@ -33,10 +36,10 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts WHERE date >= :startDate AND date <= :endDate ORDER BY date ASC")
     suspend fun getWorkoutsByDateRange(startDate: String, endDate: String): List<WorkoutEntity>
 
-    @Query("SELECT COUNT(*) FROM workouts WHERE weekNumber = :weekNumber AND type IN ('EASY','LONG','TEMPO','RECOVERY') AND isCompleted = 1")
+    @Query("SELECT COUNT(*) FROM workouts WHERE weekNumber = :weekNumber AND type IN ('EASY','LONG','TEMPO','RECOVERY','INTERVAL','REPETITION') AND isCompleted = 1")
     suspend fun countCompletedRunsInWeek(weekNumber: Int): Int
 
-    @Query("SELECT COUNT(*) FROM workouts WHERE weekNumber = :weekNumber AND type IN ('EASY','LONG','TEMPO','RECOVERY')")
+    @Query("SELECT COUNT(*) FROM workouts WHERE weekNumber = :weekNumber AND type IN ('EASY','LONG','TEMPO','RECOVERY','INTERVAL','REPETITION')")
     suspend fun countRunsInWeek(weekNumber: Int): Int
 
     @Query("DELETE FROM workouts")

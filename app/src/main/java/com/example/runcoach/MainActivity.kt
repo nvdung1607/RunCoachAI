@@ -44,6 +44,7 @@ import androidx.navigation.compose.rememberNavController
 import com.example.runcoach.presentation.MainViewModel
 import com.example.runcoach.presentation.MainViewModelFactory
 import com.example.runcoach.presentation.screens.CalendarScreen
+import com.example.runcoach.presentation.screens.CustomPlanScreen
 import com.example.runcoach.presentation.screens.DashboardScreen
 import com.example.runcoach.presentation.screens.HistoryScreen
 import com.example.runcoach.presentation.screens.OnboardingScreen
@@ -276,6 +277,14 @@ class MainActivity : ComponentActivity() {
 
                         composable("plan") {
                             PlanScreen(
+                                viewModel = viewModel,
+                                onNavigateBack = { navController.popBackStack() },
+                                onNavigateToCustomPlan = { navController.navigate("custom_plan") }
+                            )
+                        }
+
+                        composable("custom_plan") {
+                            CustomPlanScreen(
                                 viewModel = viewModel,
                                 onNavigateBack = { navController.popBackStack() }
                             )

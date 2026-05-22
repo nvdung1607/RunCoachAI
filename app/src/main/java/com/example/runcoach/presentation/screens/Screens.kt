@@ -74,6 +74,9 @@ fun OnboardingScreen(
     var fitnessLevel by remember { mutableStateOf("BEGINNER") }
     var targetDistance by remember { mutableIntStateOf(21) }
     var maxSessions by remember { mutableIntStateOf(3) }
+    var gender by remember { mutableStateOf("MALE") }
+    var age by remember { mutableIntStateOf(25) }
+    var activityLevel by remember { mutableStateOf("SEDENTARY") }
     val context = LocalContext.current
     val isDark = isSystemInDarkTheme()
     val bgBrush = Brush.verticalGradient(
@@ -310,6 +313,99 @@ fun OnboardingScreen(
                             Text(label, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface)
                         }
                     }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text("Giới tính", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        listOf("♂️ Nam" to "MALE", "♀️ Nữ" to "FEMALE", "⚧️ Khác" to "OTHER").forEach { (label, value) ->
+                            val isSelected = gender == value
+                            Box(
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .clip(RoundedCornerShape(12.dp))
+                                    .background(
+                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                    .border(
+                                        width = 1.dp,
+                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                        shape = RoundedCornerShape(12.dp)
+                                    )
+                                    .clickable { gender = value }
+                                    .padding(vertical = 12.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = label,
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    textAlign = TextAlign.Center,
+                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text("Tuổi của bạn: $age tuổi", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Slider(
+                        value = age.toFloat(),
+                        onValueChange = { age = it.toInt() },
+                        valueRange = 14f..75f,
+                        steps = 60,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        Text("14 tuổi", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                        Text("75 tuổi", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
+                    }
+                    if (age >= 40) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = "ℹ️ Giáo án sẽ tự điều chỉnh với thêm ngày nghỉ hồi phục phù hợp cho runner ${if (age >= 50) "50+" else "40+"}.",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.primary.copy(0.8f),
+                            lineHeight = 16.sp
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(20.dp))
+
+                    Text("Mức độ hoạt động hiện tại", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    listOf(
+                        "SEDENTARY" to "💼 Ít vận động (công việc văn phòng)",
+                        "ACTIVE" to "🧘 Hoạt động khác (gym, yoga, bơi lội,...)",
+                        "RUNNER" to "🏃 Đã chạy bộ trước đây"
+                    ).forEach { (key, label) ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    if (activityLevel == key) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+                                    else Color.Transparent
+                                )
+                                .clickable { activityLevel = key }
+                                .padding(vertical = 8.dp, horizontal = 4.dp)
+                        ) {
+                            RadioButton(selected = (activityLevel == key), onClick = { activityLevel = key })
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
+                        }
+                    }
                 }
             }
 
@@ -328,7 +424,7 @@ fun OnboardingScreen(
                             Toast.makeText(context, "Thời gian chuẩn bị tối thiểu phải từ 4 tuần!", Toast.LENGTH_SHORT).show()
                             return@Button
                         }
-                        viewModel.saveOnboarding(raceDateText, fitnessLevel, targetDistance, maxSessions)
+                        viewModel.saveOnboarding(raceDateText, fitnessLevel, targetDistance, maxSessions, gender, age, activityLevel)
                         onNavigateToTestRun()
                     } catch (e: Exception) {
                         Toast.makeText(context, "Định dạng ngày chưa đúng YYYY-MM-DD!", Toast.LENGTH_SHORT).show()
@@ -370,6 +466,8 @@ fun TestRunScreen(
     var showFeasibilityDialog by remember { mutableStateOf(false) }
     var feasibilityReport by remember { mutableStateOf<FeasibilityReport?>(null) }
     var pendingTotalSec by remember { mutableStateOf(0.0) }
+    var showPaceGuide by remember { mutableStateOf(false) }
+    var showHowToMeasure by remember { mutableStateOf(false) }
 
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract()
@@ -469,6 +567,148 @@ fun TestRunScreen(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             modifier = Modifier.weight(1f)
                         )
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    // VDOT Preview - realtime feedback
+                    val previewTotalSec = remember(minText, secText) {
+                        val m = minText.toIntOrNull() ?: 0
+                        val s = secText.toIntOrNull() ?: 0
+                        val total = m * 60.0 + s
+                        if (total in 360.0..2400.0) total else -1.0
+                    }
+                    AnimatedVisibility(visible = previewTotalSec > 0) {
+                        val vdotPreview = remember(previewTotalSec) {
+                            if (previewTotalSec > 0) VdotCalculator.calculateVdotFor3k(previewTotalSec) else 0.0
+                        }
+                        val pacesPreview = remember(vdotPreview) {
+                            if (vdotPreview > 0) VdotCalculator.calculatePaceZones(vdotPreview) else null
+                        }
+                        if (pacesPreview != null) {
+                            Card(
+                                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
+                                shape = RoundedCornerShape(12.dp),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                            ) {
+                                Column(modifier = Modifier.padding(12.dp)) {
+                                    Text(
+                                        "⚡ Thể lực VDOT ước lượng: ${"%.1f".format(vdotPreview)}",
+                                        fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary
+                                    )
+                                    Spacer(modifier = Modifier.height(4.dp))
+                                    Text(
+                                        text = "Easy: ${VdotCalculator.formatPace(pacesPreview.easyPaceSec)}/km   " +
+                                            "Tempo: ${VdotCalculator.formatPace(pacesPreview.tempoPaceSec)}/km",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(12.dp))
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        TextButton(
+                            onClick = { showPaceGuide = !showPaceGuide },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Ôi chưa biết", fontSize = 12.sp)
+                        }
+                        TextButton(
+                            onClick = { showHowToMeasure = !showHowToMeasure },
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text("Cách đo thời gian", fontSize = 12.sp)
+                        }
+                    }
+
+                    // Pace reference guide (expandable)
+                    AnimatedVisibility(visible = showPaceGuide) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    "📊 Bảng Tham Khảo Thời Gian Chạy 3km",
+                                    fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val entries = listOf(
+                                    Triple("🐣 Mới bắt đầu hoàn toàn", "8-10 ph/km", "24-30 phút"),
+                                    Triple("🎣 Đã tập đôi chút", "6-8 ph/km", "18-24 phút"),
+                                    Triple("🚴 Chạy đều đặn", "5-6 ph/km", "15-18 phút"),
+                                    Triple("🔥 Chạy khá tốt", "4:30-5 ph/km", "13-15 phút"),
+                                    Triple("🏆 Runner chuyên", "< 4:30 ph/km", "< 13:30 phút")
+                                )
+                                entries.forEach { (group, _, time) ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text(group, fontSize = 12.sp, modifier = Modifier.weight(1.4f),
+                                            color = MaterialTheme.colorScheme.onSurface)
+                                        Text(time, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.6f),
+                                            textAlign = TextAlign.End, color = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                                Spacer(modifier = Modifier.height(8.dp))
+                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(0.1f))
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = "→ Chọn mức phù hợp với bạn rồi nhập thời gian tương ứng vào ô phút/giây phía trên!",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.primary,
+                                    fontWeight = FontWeight.Medium
+                                )
+                            }
+                        }
+                    }
+
+                    // How to measure guide (expandable)
+                    AnimatedVisibility(visible = showHowToMeasure) {
+                        Card(
+                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(0.5f)),
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                Text(
+                                    "🏃 Cách Đo Thời Gian Chạy 3km",
+                                    fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Spacer(modifier = Modifier.height(4.dp))
+                                val steps = listOf(
+                                    "📍 Tìm một sân vận động có đường chạy chuẩn (400m/vòng) hoặc một con đường bằng phẳng.",
+                                    "📱 Mở đồng hồ bấm giờ trên điện thoại hoặc đồng hồ thể thao.",
+                                    "🏃 Chạy 3km (7.5 vòng sân chuẩn) với nỗ lực tối đa của bạn.",
+                                    "⏱ Dừng bấm giờ ngay khi về đích 3km và ghi lại kết quả.",
+                                    "🎥 Hoặc dùng Strava, Garmin chạy một đoạn bất kỳ và tập ứng dụng sẽ tự đồng bộ qua Health Connect!"
+                                )
+                                steps.forEachIndexed { i, step ->
+                                    Row(verticalAlignment = Alignment.Top) {
+                                        Text("${i + 1}.", fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier.padding(end = 6.dp, top = 1.dp))
+                                        Text(step, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface, lineHeight = 17.sp)
+                                    }
+                                }
+                            }
+                        }
                     }
 
                     Spacer(modifier = Modifier.height(16.dp))
@@ -1112,7 +1352,7 @@ fun DashboardScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Phiên bản 1.3",
+                    text = "Phiên bản 1.4",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f)
                 )
@@ -2188,7 +2428,8 @@ fun NotificationSettingsDialog(
 @Composable
 fun PlanScreen(
     viewModel: MainViewModel,
-    onNavigateBack: () -> Unit
+    onNavigateBack: () -> Unit,
+    onNavigateToCustomPlan: () -> Unit
 ) {
     val workoutsList by viewModel.workouts.collectAsState()
     val context = LocalContext.current
@@ -2214,6 +2455,15 @@ fun PlanScreen(
                 navigationIcon = {
                     IconButton(onClick = onNavigateBack) {
                         Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    IconButton(onClick = onNavigateToCustomPlan) {
+                        Icon(
+                            imageVector = Icons.Default.Edit,
+                            contentDescription = "Thiết kế giáo án",
+                            tint = MaterialTheme.colorScheme.primary
+                        )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(

@@ -5,12 +5,10 @@ import androidx.work.CoroutineWorker
 import androidx.work.WorkerParameters
 import com.example.runcoach.RunCoachApplication
 import com.example.runcoach.data.health.HealthConnectManager
-import com.example.runcoach.data.local.db.WorkoutEntity
 import java.time.LocalDate
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
-
 import kotlinx.coroutines.flow.first
 
 class SyncWorker(
@@ -28,14 +26,12 @@ class SyncWorker(
         }
 
         try {
-            // Get all workouts from local DB
-            // We can block/suspend to query all workouts
-            val workouts = dao.getWorkoutByDate("dummy") // just dummy check or we can write a DAO method to get all list
-            // Since we need to get all workouts, let's write a standard non-flow method in Dao if needed,
-            // or query using a flow and take the first item.
             val allWorkouts = dao.getAllWorkoutsFlow().first()
+            
+            // Include all running/workout types that should be synced
+            val runningTypes = setOf("EASY", "LONG", "TEMPO", "RACE", "INTERVAL", "REPETITION", "RECOVERY")
             val uncompletedRunningWorkouts = allWorkouts.filter { 
-                !it.isCompleted && (it.type == "EASY" || it.type == "LONG" || it.type == "TEMPO" || it.type == "RACE")
+                !it.isCompleted && !it.isSkipped && it.type in runningTypes
             }
 
             if (uncompletedRunningWorkouts.isEmpty()) {
@@ -44,37 +40,62 @@ class SyncWorker(
 
             val zoneId = ZoneId.systemDefault()
             val formatter = DateTimeFormatter.ISO_LOCAL_DATE
+            val today = LocalDate.now()
 
-            for (workout in uncompletedRunningWorkouts) {
-                val localDate = LocalDate.parse(workout.date, formatter)
-                
-                // Define start and end of the day in UTC Instants
-                val dayStartInstant = ZonedDateTime.of(localDate.atStartOfDay(), zoneId).toInstant()
-                val dayEndInstant = ZonedDateTime.of(localDate.plusDays(1).atStartOfDay(), zoneId).toInstant()
+            // Option B: Query HC for last 3 days and match to uncompleted workouts within +-1 day
+            // Build a window of the last 3 days of HC data
+            val windowStart = today.minusDays(2)
+            val windowStartInstant = ZonedDateTime.of(windowStart.atStartOfDay(), zoneId).toInstant()
+            val windowEndInstant = ZonedDateTime.of(today.plusDays(1).atStartOfDay(), zoneId).toInstant()
+            
+            val allRecentSessions = healthConnectManager.getRunningSessions(windowStartInstant, windowEndInstant)
+            
+            if (allRecentSessions.isEmpty()) {
+                return Result.success()
+            }
 
-                val sessions = healthConnectManager.getRunningSessions(dayStartInstant, dayEndInstant)
+            // Group sessions by the date they occurred (local date)
+            val sessionsByDate = allRecentSessions.groupBy { session ->
+                session.startTime.atZone(zoneId).toLocalDate()
+            }
+
+            // For each date that has HC sessions, try to find a matching uncompleted workout
+            // within +-1 day of that session date
+            for ((sessionDate, sessions) in sessionsByDate) {
+                val totalDistance = sessions.sumOf { it.distanceKm }
+                val totalDuration = sessions.sumOf { it.durationMinutes }
                 
-                if (sessions.isNotEmpty()) {
-                    // Match the run! We aggregate distances and durations if there are multiple runs on the same day.
-                    val totalDistance = sessions.sumOf { it.distanceKm }
-                    val totalDuration = sessions.sumOf { it.durationMinutes }
-                    
-                    // If they ran at least 0.5km, we count it as a valid completion of the workout
-                    if (totalDistance >= 0.5) {
-                        val updatedWorkout = workout.copy(
-                            isCompleted = true,
-                            actualDistanceKm = totalDistance,
-                            actualDurationMin = totalDuration,
-                            completedDate = sessions.first().startTime.toString(),
-                            syncSource = "HEALTH_CONNECT"
-                        )
-                        dao.update(updatedWorkout)
-                    }
+                if (totalDistance < 0.5) continue // Skip too-short runs
+
+                // Find best matching uncompleted workout: exact date first, then +-1 day
+                val candidateDates = listOf(
+                    sessionDate.toString(),
+                    sessionDate.minusDays(1).toString(),
+                    sessionDate.plusDays(1).toString()
+                )
+                
+                val matchingWorkout = candidateDates
+                    .mapNotNull { dateStr -> uncompletedRunningWorkouts.find { it.date == dateStr } }
+                    .firstOrNull()
+                
+                if (matchingWorkout != null && !matchingWorkout.isCompleted) {
+                    val updatedWorkout = matchingWorkout.copy(
+                        isCompleted = true,
+                        actualDistanceKm = totalDistance,
+                        actualDurationMin = totalDuration,
+                        completedDate = sessions.first().startTime.toString(),
+                        syncSource = "HEALTH_CONNECT"
+                    )
+                    dao.update(updatedWorkout)
+                    com.example.runcoach.utils.AppLogger.i(
+                        "SyncWorker: Matched ${totalDistance}km run on $sessionDate to workout on ${matchingWorkout.date}"
+                    )
                 }
             }
+            
             return Result.success()
         } catch (e: Exception) {
-            e.printStackTrace()
+            com.example.runcoach.utils.AppLogger.e("SyncWorker doWork failed", e)
             return Result.retry()
         }
     }
