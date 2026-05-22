@@ -342,7 +342,7 @@ fun OnboardingScreen(
 
             Spacer(modifier = Modifier.height(24.dp))
             Text(
-                text = "Phiên bản 1.2",
+                text = "Phiên bản 1.3",
                 fontSize = 11.sp,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f),
                 modifier = Modifier.padding(bottom = 20.dp)
@@ -1112,7 +1112,7 @@ fun DashboardScreen(
                 contentAlignment = Alignment.Center
             ) {
                 Text(
-                    text = "Phiên bản 1.2",
+                    text = "Phiên bản 1.3",
                     fontSize = 11.sp,
                     color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.35f)
                 )

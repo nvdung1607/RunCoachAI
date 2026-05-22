@@ -222,6 +222,8 @@ object PlanGenerator {
         }
 
         val schedule = getWorkoutSchedule(maxSessionsPerWeek, preferredLongRunDay)
+        val weeklyWorkoutCount = mutableMapOf<Int, Int>()
+        var activeWorkoutCount = 0
 
         for (dayOffset in 0..totalDays) {
             val currentDate = startDate.plusDays(dayOffset)
@@ -264,12 +266,36 @@ object PlanGenerator {
                 continue
             }
 
-            val role = schedule[dayOfWeek] ?: WorkoutRole.REST
+            var role = schedule[dayOfWeek] ?: WorkoutRole.REST
+            
+            // Force first workout to be today
+            if (dayOffset == 0L && role == WorkoutRole.REST) {
+                role = WorkoutRole.EASY_1
+            }
+
+            var isWorkout = role != WorkoutRole.REST
+            if (isWorkout) {
+                val currentWeekCount = weeklyWorkoutCount[weekNumber] ?: 0
+                if (currentWeekCount >= maxSessionsPerWeek) {
+                    role = WorkoutRole.REST
+                    isWorkout = false
+                } else {
+                    weeklyWorkoutCount[weekNumber] = currentWeekCount + 1
+                    activeWorkoutCount++
+                }
+            }
+
+            val finalRole = if (isWorkout && activeWorkoutCount <= 3) {
+                WorkoutRole.EASY_1
+            } else {
+                role
+            }
+
             val phase = getPhase(weekNumber, baseWeeks, buildWeeks, peakWeeks)
             val isRecoveryWeek = weekNumber % 4 == 0 && phase != Phase.PEAK && phase != Phase.TAPER
             val lDist = longRunDistances[weekNumber]
 
-            val workout = when (role) {
+            val workout = when (finalRole) {
                 WorkoutRole.REST -> createRestWorkout(currentDate, weekNumber)
                 WorkoutRole.LONG -> {
                     val hasMPace = phase == Phase.PEAK

@@ -218,12 +218,47 @@ class PlanGeneratorTest {
 
         val longRuns = plan.filter { it.type.startsWith("LONG") }.associateBy { it.weekNumber }
 
-        assertEquals(5.0, longRuns[1]?.targetDistanceKm ?: 0.0, 0.01)
+        // Week 1's long run is overridden to EASY because it is within the first 3 active workouts.
+        // So longRuns[1] is null.
+        // But Week 2 and Week 3 long runs are preserved as LONG runs.
         assertEquals(6.0, longRuns[2]?.targetDistanceKm ?: 0.0, 0.01)
         assertEquals(7.0, longRuns[3]?.targetDistanceKm ?: 0.0, 0.01)
 
-        assertTrue(longRuns[1]?.instructions?.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") == true)
-        assertTrue(longRuns[2]?.instructions?.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") == true)
-        assertTrue(longRuns[3]?.instructions?.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") == true)
+        val week1Workouts = plan.filter { it.weekNumber == 1 && it.type != "REST" }
+        val week2Workouts = plan.filter { it.weekNumber == 2 && it.type != "REST" }
+        val week3Workouts = plan.filter { it.weekNumber == 3 && it.type != "REST" }
+
+        assertTrue(week1Workouts.any { it.instructions.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") })
+        assertTrue(week2Workouts.any { it.instructions.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") })
+        assertTrue(week3Workouts.any { it.instructions.contains("Chạy nhẹ 1 phút, đi bộ 1 phút") })
+    }
+
+    @Test
+    fun testFirstWorkoutIsTodayAndEasy() {
+        // Today is Wednesday
+        val startDate = LocalDate.of(2026, 5, 20)
+        val raceDate = LocalDate.of(2026, 8, 22)
+        
+        val plan = PlanGenerator.generatePlan(
+            startDate = startDate,
+            raceDate = raceDate,
+            vdotScore = 30.0,
+            level = FitnessLevel.BEGINNER,
+            targetDistance = 21,
+            maxSessionsPerWeek = 3
+        )
+
+        // 1. The first day of the plan (which is today, 2026-05-20) must be an EASY run
+        val todayWorkout = plan.firstOrNull { it.date == "2026-05-20" }
+        assertNotNull("First day should have a workout", todayWorkout)
+        assertEquals("EASY", todayWorkout?.type)
+
+        // 2. The first 3 active workouts of the plan must be EASY runs
+        val activeWorkouts = plan.filter { it.type != "REST" && it.type != "RACE" }
+        assertTrue("Should have at least 3 active workouts", activeWorkouts.size >= 3)
+        
+        assertEquals("First active workout should be EASY", "EASY", activeWorkouts[0].type)
+        assertEquals("Second active workout should be EASY", "EASY", activeWorkouts[1].type)
+        assertEquals("Third active workout should be EASY", "EASY", activeWorkouts[2].type)
     }
 }
