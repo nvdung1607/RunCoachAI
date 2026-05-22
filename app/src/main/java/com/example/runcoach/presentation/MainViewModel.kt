@@ -57,21 +57,21 @@ class MainViewModel(
     val userPreferences: StateFlow<UserPreferences> = prefsRepository.userPreferencesFlow
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = UserPreferences("", "BEGINNER", 0f, false, 480, 420, 510, "SYSTEM", true, 6, 0, 21, 3, false, "MALE", 25, "SEDENTARY")
         )
 
     val workouts: StateFlow<List<WorkoutEntity>> = workoutDao.getAllWorkoutsFlow()
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = emptyList()
         )
 
     val todayWorkout: StateFlow<WorkoutEntity?> = workoutDao.getWorkoutFlowByDate(LocalDate.now().toString())
         .stateIn(
             scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5000),
+            started = SharingStarted.Eagerly,
             initialValue = null
         )
 
@@ -102,6 +102,7 @@ class MainViewModel(
         com.example.runcoach.utils.AppLogger.d("User saved onboarding: raceDate=$raceDate, level=$fitnessLevel, target=${targetDistance}km, sessions=$maxSessions")
         viewModelScope.launch {
             prefsRepository.saveOnboardingPreferences(raceDate, fitnessLevel, targetDistance, maxSessions, gender, age, activityLevel)
+            updateWidget()
         }
     }
 
@@ -165,6 +166,7 @@ class MainViewModel(
                     syncSource = "MANUAL"
                 )
                 workoutDao.update(updated)
+                updateWidget()
             }
         }
     }
@@ -183,6 +185,7 @@ class MainViewModel(
                     syncSource = if (isCompleted) "MANUAL" else null
                 )
                 workoutDao.update(updated)
+                updateWidget()
             }
         }
     }
@@ -224,6 +227,8 @@ class MainViewModel(
 
             // If conflict exists, insert alongside (both will show)
             workoutDao.insert(rescheduled)
+            
+            updateWidget()
 
             onResult(if (hasConflict) 1 else 0, existingAtNew?.description)
         }
@@ -565,12 +570,14 @@ class MainViewModel(
     fun upsertWorkout(workout: WorkoutEntity) {
         viewModelScope.launch {
             workoutDao.insert(workout)
+            updateWidget()
         }
     }
 
     fun deleteWorkout(workout: WorkoutEntity) {
         viewModelScope.launch {
             workoutDao.delete(workout)
+            updateWidget()
         }
     }
 

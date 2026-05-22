@@ -1163,10 +1163,11 @@ fun DashboardScreen(
                 Card(
                     colors = CardDefaults.cardColors(
                         containerColor = if (workout.isCompleted) ColorCompleted.copy(alpha = 0.08f)
+                        else if (workout.type == "REST") MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
                         else wColor.copy(alpha = 0.06f)
                     ),
                     shape = RoundedCornerShape(24.dp),
-                    border = BorderStroke(1.5.dp, wColor.copy(alpha = if (isActiveWorkout) 0.5f else 0.2f)),
+                    border = BorderStroke(1.5.dp, if (workout.type == "REST") ColorRest.copy(alpha = 0.35f) else wColor.copy(alpha = if (isActiveWorkout) 0.5f else 0.2f)),
                     modifier = Modifier
                         .fillMaxWidth()
                         .clickable { showWorkoutDetails = workout }
@@ -1281,13 +1282,44 @@ fun DashboardScreen(
                     }
                 }
             } else {
+                val restColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)
+                val restBorderColor = ColorRest.copy(alpha = 0.35f)
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = restColor),
+                    shape = RoundedCornerShape(24.dp),
+                    border = BorderStroke(1.5.dp, restBorderColor),
                     modifier = Modifier.fillMaxWidth()
                 ) {
-                    Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
-                        Text("😌 Hôm nay là ngày nghỉ ngoài lịch tập.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), textAlign = TextAlign.Center)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(20.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(40.dp)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(ColorRest.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text("😌", fontSize = 20.sp)
+                        }
+                        Spacer(modifier = Modifier.width(14.dp))
+                        Column {
+                            Text(
+                                text = "Hôm nay: Ngày nghỉ ngơi",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                text = "Không có lịch tập hôm nay. Hãy nghỉ ngơi đầy đủ để cơ thể hồi phục tốt nhất.",
+                                fontSize = 13.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                            )
+                        }
                     }
                 }
             }

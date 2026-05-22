@@ -41,9 +41,13 @@ class RaceCountdownWidget : AppWidgetProvider() {
                 
                 val todayDateStr = LocalDate.now().toString()
                 val todayWorkout = workoutDao?.getWorkoutByDate(todayDateStr)
+                
+                val allWorkouts = workoutDao?.getAllWorkoutsDirect() ?: emptyList()
+                val completedCount = allWorkouts.count { it.isCompleted }
+                val totalCount = allWorkouts.count { it.type !in listOf("REST") }
 
                 for (appWidgetId in appWidgetIds) {
-                    updateWidget(context, appWidgetManager, appWidgetId, raceDateStr, targetDist, todayWorkout)
+                    updateWidget(context, appWidgetManager, appWidgetId, raceDateStr, targetDist, todayWorkout, completedCount, totalCount)
                 }
             } catch (e: Exception) {
                 com.example.runcoach.utils.AppLogger.e("RaceCountdownWidget: Exception during update", e)
@@ -71,7 +75,9 @@ class RaceCountdownWidget : AppWidgetProvider() {
         appWidgetId: Int,
         raceDateStr: String,
         targetDistance: Int,
-        todayWorkout: WorkoutEntity?
+        todayWorkout: WorkoutEntity?,
+        completedCount: Int,
+        totalCount: Int
     ) {
         val views = RemoteViews(context.packageName, R.layout.race_countdown_widget)
 
@@ -90,14 +96,16 @@ class RaceCountdownWidget : AppWidgetProvider() {
                 val raceDate = LocalDate.parse(raceDateStr)
                 val daysRemaining = ChronoUnit.DAYS.between(today, raceDate)
 
+                val completedText = if (totalCount > 0) " • $completedCount/$totalCount buổi" else ""
+
                 if (daysRemaining < 0) {
                     views.setTextViewText(R.id.widget_days_count, "🏁")
                     views.setTextViewText(R.id.widget_days_label, "Đã đến ngày đua")
-                    views.setTextViewText(R.id.widget_target, "Cự ly: $targetDistance km")
+                    views.setTextViewText(R.id.widget_target, "Cự ly: $targetDistance km$completedText")
                 } else {
                     views.setTextViewText(R.id.widget_days_count, daysRemaining.toString())
                     views.setTextViewText(R.id.widget_days_label, "ngày còn lại")
-                    views.setTextViewText(R.id.widget_target, "Mục tiêu: $targetDistance km")
+                    views.setTextViewText(R.id.widget_target, "Mục tiêu: $targetDistance km$completedText")
                 }
 
                 // Update Today's Workout Card
