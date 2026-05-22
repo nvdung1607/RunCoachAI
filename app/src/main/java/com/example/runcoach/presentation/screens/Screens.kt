@@ -834,8 +834,9 @@ fun TestRunScreen(
                     )
 
                     if (report.isFeasible) {
-                        viewModel.completeTestRun(totalSec)
-                        onNavigateToDashboard()
+                        viewModel.completeTestRun(totalSec) {
+                            onNavigateToDashboard()
+                        }
                     } else {
                         pendingTotalSec = totalSec
                         feasibilityReport = report
@@ -890,8 +891,9 @@ fun TestRunScreen(
                     Button(
                         onClick = {
                             showFeasibilityDialog = false
-                            viewModel.completeTestRun(pendingTotalSec)
-                            onNavigateToDashboard()
+                            viewModel.completeTestRun(pendingTotalSec) {
+                                onNavigateToDashboard()
+                            }
                         },
                         colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
                     ) {

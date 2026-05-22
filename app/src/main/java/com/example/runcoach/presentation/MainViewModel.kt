@@ -83,7 +83,7 @@ class MainViewModel(
         }
     }
 
-    fun completeTestRun(timeSeconds: Double) {
+    fun completeTestRun(timeSeconds: Double, onSuccess: () -> Unit = {}) {
         com.example.runcoach.utils.AppLogger.i("User completed test run: time=$timeSeconds seconds")
         viewModelScope.launch {
             val vdot = VdotCalculator.calculateVdotFor3k(timeSeconds)
@@ -127,6 +127,7 @@ class MainViewModel(
                 notifPrefs.notificationHour,
                 notifPrefs.notificationMinute
             )
+            onSuccess()
         }
     }
 
