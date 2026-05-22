@@ -953,6 +953,7 @@ fun DashboardScreen(
     var showNotifSettings by remember { mutableStateOf(false) }
     var showWorkoutDetails by remember { mutableStateOf<WorkoutEntity?>(null) }
     var syncResultMessage by remember { mutableStateOf<String?>(null) }
+    var pendingSyncProposal by remember { mutableStateOf<com.example.runcoach.presentation.ProposedSync?>(null) }
     
     // Dialog states for informational popups
     var showRaceDayInfo by remember { mutableStateOf(false) }
@@ -1048,9 +1049,19 @@ fun DashboardScreen(
                     IconButton(
                         onClick = {
                             if (hcPermissionsGranted) {
-                                Toast.makeText(context, "Đang kiểm tra dữ liệu Health Connect...", Toast.LENGTH_SHORT).show()
-                                viewModel.syncRecentWorkouts { msg ->
-                                    syncResultMessage = msg
+                                Toast.makeText(context, "Đang quét dữ liệu Health Connect...", Toast.LENGTH_SHORT).show()
+                                viewModel.checkSyncProposed { proposal, error ->
+                                    if (error != null) {
+                                        syncResultMessage = error
+                                    } else if (proposal != null) {
+                                        if (proposal.shifts.isNotEmpty()) {
+                                            pendingSyncProposal = proposal
+                                        } else {
+                                            viewModel.applySync(proposal) { msg ->
+                                                syncResultMessage = msg
+                                            }
+                                        }
+                                    }
                                 }
                             } else {
                                 permissionsLauncher.launch(healthConnectManager.requiredPermissions)
@@ -1851,6 +1862,277 @@ fun DashboardScreen(
                 }
             }
         )
+    }
+
+    // Sync Confirmation Dialog for Shifts/Swaps
+    if (pendingSyncProposal != null) {
+        val proposal = pendingSyncProposal!!
+        Dialog(
+            onDismissRequest = { pendingSyncProposal = null },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.surface
+                ),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
+                modifier = Modifier
+                    .fillMaxWidth(0.95f)
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(20.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    // Header
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(36.dp)
+                                .clip(RoundedCornerShape(8.dp))
+                                .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Sync,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(20.dp)
+                            )
+                        }
+                        Text(
+                            text = "Đồng Bộ & Thay Đổi Lịch",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    Text(
+                        text = "Phát hiện bạn đã tập chạy khác ngày dự kiến. Bạn có đồng ý cập nhật kết quả và tự động điều chỉnh lịch tập dưới đây?",
+                        fontSize = 13.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                        textAlign = TextAlign.Start,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    // List of shifts/swaps
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(weight = 1f, fill = false)
+                            .verticalScroll(rememberScrollState()),
+                        verticalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        proposal.shifts.forEach { shift ->
+                            val origDateFormatted = try {
+                                val d = LocalDate.parse(shift.originalDate)
+                                val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
+                                "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
+                            } catch (e: Exception) { shift.originalDate }
+
+                            val newDateFormatted = try {
+                                val d = LocalDate.parse(shift.newDate)
+                                val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
+                                "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
+                            } catch (e: Exception) { shift.newDate }
+
+                            Card(
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = CardDefaults.cardColors(
+                                    containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                                ),
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+                                shape = RoundedCornerShape(12.dp)
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    // Row showing Shift
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth(),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        // Original planned card
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Lịch dự kiến",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = origDateFormatted,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.primary
+                                            )
+                                            Text(
+                                                text = shift.workout.description,
+                                                fontSize = 12.sp,
+                                                maxLines = 1,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+
+                                        Icon(
+                                            imageVector = Icons.Default.ArrowForward,
+                                            contentDescription = "Chuyển sang",
+                                            tint = MaterialTheme.colorScheme.primary,
+                                            modifier = Modifier
+                                                .padding(horizontal = 8.dp)
+                                                .size(18.dp)
+                                        )
+
+                                        // Actual run date card
+                                        Column(modifier = Modifier.weight(1f)) {
+                                            Text(
+                                                text = "Đã chạy thực tế",
+                                                fontSize = 11.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                            Text(
+                                                text = newDateFormatted,
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = Color(0xFF2E7D32)
+                                            )
+                                            Text(
+                                                text = "${String.format(java.util.Locale.US, "%.1f", shift.actualDistanceKm)} km hoàn thành",
+                                                fontSize = 12.sp,
+                                                fontWeight = FontWeight.SemiBold,
+                                                color = MaterialTheme.colorScheme.onSurface
+                                            )
+                                        }
+                                    }
+
+                                    // If swap occurred
+                                    if (shift.workoutOnNewDate != null) {
+                                        HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth(),
+                                            verticalAlignment = Alignment.CenterVertically,
+                                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                        ) {
+                                            Icon(
+                                                imageVector = Icons.Default.SwapHoriz,
+                                                contentDescription = "Swap",
+                                                tint = MaterialTheme.colorScheme.secondary,
+                                                modifier = Modifier.size(16.dp)
+                                            )
+                                            val swapType = if (shift.workoutOnNewDate.type == "REST") "Nghỉ ngơi" else shift.workoutOnNewDate.description
+                                            Text(
+                                                text = "Bài tập '$swapType' của ngày $newDateFormatted sẽ chuyển sang ngày $origDateFormatted",
+                                                fontSize = 11.sp,
+                                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+
+                        // Also list exact matches briefly for transparency
+                        if (proposal.exactMatches.isNotEmpty()) {
+                            Text(
+                                text = "Các bài tập khớp đúng lịch:",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.padding(top = 4.dp)
+                            )
+                            proposal.exactMatches.forEach { match ->
+                                val dateFormatted = try {
+                                    val d = LocalDate.parse(match.workout.date)
+                                    val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
+                                    "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
+                                } catch (e: Exception) { match.workout.date }
+
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(horizontal = 4.dp),
+                                    verticalAlignment = Alignment.CenterVertically,
+                                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Default.Check,
+                                        contentDescription = "Khớp",
+                                        tint = Color(0xFF2E7D32),
+                                        modifier = Modifier.size(16.dp)
+                                    )
+                                    Text(
+                                        text = "$dateFormatted: ${match.workout.description} (${String.format(java.util.Locale.US, "%.1f", match.actualDistanceKm)} km)",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                }
+                            }
+                        }
+                    }
+
+                    Spacer(modifier = Modifier.height(24.dp))
+
+                    // Buttons
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        OutlinedButton(
+                            onClick = { pendingSyncProposal = null },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp),
+                            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f))
+                        ) {
+                            Text(
+                                text = "Hủy bỏ",
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                val currentProposal = pendingSyncProposal!!
+                                pendingSyncProposal = null
+                                viewModel.applySync(currentProposal) { msg ->
+                                    syncResultMessage = msg
+                                }
+                            },
+                            modifier = Modifier.weight(1f),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.Check,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "Đồng ý",
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 13.sp
+                            )
+                        }
+                    }
+                }
+            }
+        }
     }
 
     // Informational Popups

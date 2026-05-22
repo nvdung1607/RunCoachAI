@@ -55,7 +55,7 @@ class SyncWorker(
             val runningTypes = setOf("EASY", "LONG", "TEMPO", "RACE", "INTERVAL", "REPETITION", "RECOVERY")
             var syncedCount = 0
             var totalSyncedKm = 0.0
-            val shifts = mutableListOf<String>()
+            var hasMismatch = false
 
             for ((sessionDate, sessions) in sessionsByDate) {
                 val totalDistance = sessions.sumOf { it.distanceKm }
@@ -63,72 +63,39 @@ class SyncWorker(
                 
                 if (totalDistance < 0.5) continue // Coerce at least 0.5km to avoid random short tracks
 
-                // Find matching uncompleted workout within +-1 day
-                val candidateDates = listOf(
-                    sessionDate.toString(),
-                    sessionDate.minusDays(1).toString(),
-                    sessionDate.plusDays(1).toString()
-                )
-                
-                for (dateStr in candidateDates) {
-                    val workout = dao.getWorkoutByDate(dateStr)
-                    if (workout != null && !workout.isCompleted && !workout.isSkipped && workout.type in runningTypes) {
-                        if (dateStr != sessionDate.toString()) {
-                            // We need to shift this planned workout from dateStr to sessionDate!
-                            val workoutOnSessionDate = dao.getWorkoutByDate(sessionDate.toString())
-                            
-                            val updatedMatchingWorkout = workout.copy(
-                                date = sessionDate.toString(),
-                                weekNumber = workoutOnSessionDate?.weekNumber ?: workout.weekNumber,
-                                isCompleted = true,
-                                actualDistanceKm = totalDistance,
-                                actualDurationMin = totalDuration,
-                                completedDate = sessions.first().startTime.toString(),
-                                syncSource = "HEALTH_CONNECT"
-                            )
-                            
-                            val updatedOtherWorkout = workoutOnSessionDate?.copy(
-                                date = workout.date,
-                                weekNumber = workout.weekNumber
-                            )
-                            
-                            // Delete both old keys first
-                            dao.delete(workout)
-                            if (workoutOnSessionDate != null) {
-                                dao.delete(workoutOnSessionDate)
-                            }
-                            
-                            // Insert updated ones
-                            dao.insert(updatedMatchingWorkout)
-                            if (updatedOtherWorkout != null) {
-                                dao.insert(updatedOtherWorkout)
-                            }
-                            
-                            val formatter = DateTimeFormatter.ofPattern("dd/MM")
-                            val sessionDateFormatted = sessionDate.format(formatter)
-                            val originalDateFormatted = LocalDate.parse(workout.date).format(formatter)
-                            shifts.add("Chuyển bài tập ngày $originalDateFormatted sang ngày $sessionDateFormatted (${workout.description})")
-                            
-                            com.example.runcoach.utils.AppLogger.i(
-                                "SyncWorker: Shifted and completed workout from $dateStr to $sessionDate"
-                            )
-                        } else {
-                            // Match on same day, normal update
-                            val updated = workout.copy(
-                                isCompleted = true,
-                                actualDistanceKm = totalDistance,
-                                actualDurationMin = totalDuration,
-                                completedDate = sessions.first().startTime.toString(),
-                                syncSource = "HEALTH_CONNECT"
-                            )
-                            dao.update(updated)
-                            com.example.runcoach.utils.AppLogger.i(
-                                "SyncWorker: Synced ${totalDistance}km on exact date $sessionDate"
-                            )
+                // Try exact match first
+                val exactWorkout = dao.getWorkoutByDate(sessionDate.toString())
+                if (exactWorkout != null && !exactWorkout.isCompleted && !exactWorkout.isSkipped && exactWorkout.type in runningTypes) {
+                    // Match on exact date, normal update
+                    val updated = exactWorkout.copy(
+                        isCompleted = true,
+                        actualDistanceKm = totalDistance,
+                        actualDurationMin = totalDuration,
+                        completedDate = sessions.first().startTime.toString(),
+                        syncSource = "HEALTH_CONNECT"
+                    )
+                    dao.update(updated)
+                    com.example.runcoach.utils.AppLogger.i(
+                        "SyncWorker: Synced ${totalDistance}km on exact date $sessionDate"
+                    )
+                    syncedCount++
+                    totalSyncedKm += totalDistance
+                } else {
+                    // No exact match, check for shift candidates within +-1 day
+                    val shiftDates = listOf(
+                        sessionDate.minusDays(1).toString(),
+                        sessionDate.plusDays(1).toString()
+                    )
+                    var foundShiftCandidate = false
+                    for (dateStr in shiftDates) {
+                        val workout = dao.getWorkoutByDate(dateStr)
+                        if (workout != null && !workout.isCompleted && !workout.isSkipped && workout.type in runningTypes) {
+                            foundShiftCandidate = true
+                            break
                         }
-                        syncedCount++
-                        totalSyncedKm += totalDistance
-                        break // Found a match for this session, move to next date
+                    }
+                    if (foundShiftCandidate) {
+                        hasMismatch = true
                     }
                 }
             }
@@ -141,11 +108,18 @@ class SyncWorker(
                 applicationContext.sendBroadcast(intent)
 
                 // Show system notification
-                var notifMsg = "Đã đồng bộ thành công $syncedCount buổi tập! (Tổng: ${"%,.1f".format(totalSyncedKm)} km)"
-                if (shifts.isNotEmpty()) {
-                    notifMsg += "\nĐã tự động điều chỉnh giáo án tuần này theo thực tế tập luyện."
-                }
-                showSyncNotification(applicationContext, "Hoàn thành buổi chạy mới!", notifMsg)
+                val notifMsg = "Đã đồng bộ thành công $syncedCount buổi tập! (Tổng: ${"%,.1f".format(totalSyncedKm)} km)"
+                showSyncNotification(applicationContext, "Hoàn thành buổi chạy mới!", notifMsg, 2002)
+            }
+
+            if (hasMismatch) {
+                // Show notification prompting user to sync manually
+                showSyncNotification(
+                    applicationContext,
+                    "Lịch tập luyện có sự thay đổi?",
+                    "Phát hiện buổi chạy mới không khớp lịch. Hãy mở ứng dụng để đồng bộ và cập nhật giáo án.",
+                    2003
+                )
             }
 
             return Result.success()
@@ -155,7 +129,7 @@ class SyncWorker(
         }
     }
 
-    private fun showSyncNotification(context: Context, title: String, message: String) {
+    private fun showSyncNotification(context: Context, title: String, message: String, notificationId: Int = 2002) {
         val notificationManager = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
         val channelId = "health_connect_sync"
 
@@ -187,6 +161,6 @@ class SyncWorker(
             .setContentIntent(pendingIntent)
             .setAutoCancel(true)
 
-        notificationManager.notify(2002, builder.build())
+        notificationManager.notify(notificationId, builder.build())
     }
 }

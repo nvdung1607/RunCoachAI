@@ -26,6 +26,28 @@ import kotlinx.coroutines.launch
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 
+data class ProposedSync(
+    val exactMatches: List<ExactMatch>,
+    val shifts: List<ProposedShift>
+)
+
+data class ExactMatch(
+    val workout: WorkoutEntity,
+    val actualDistanceKm: Double,
+    val actualDurationMin: Double,
+    val actualStartTime: String
+)
+
+data class ProposedShift(
+    val workout: WorkoutEntity,
+    val originalDate: String,
+    val newDate: String,
+    val workoutOnNewDate: WorkoutEntity?,
+    val actualDistanceKm: Double,
+    val actualDurationMin: Double,
+    val actualStartTime: String
+)
+
 class MainViewModel(
     private val prefsRepository: UserPreferencesRepository,
     private val workoutDao: WorkoutDao,
@@ -344,6 +366,175 @@ class MainViewModel(
 
     // Backward compat alias
     fun syncTodayWorkout(onResult: (String) -> Unit) = syncRecentWorkouts(onResult)
+
+    fun checkSyncProposed(onResult: (ProposedSync?, String?) -> Unit) {
+        com.example.runcoach.utils.AppLogger.d("Checking proposed Health Connect sync")
+        viewModelScope.launch {
+            try {
+                val app = getApplication<RunCoachApplication>()
+                val healthConnectManager = com.example.runcoach.data.health.HealthConnectManager(app)
+                
+                if (!healthConnectManager.hasPermissions()) {
+                    onResult(null, "Chưa cấp quyền Health Connect.")
+                    return@launch
+                }
+
+                val zoneId = java.time.ZoneId.systemDefault()
+                val today = java.time.LocalDate.now()
+                val windowStart = today.minusDays(2)
+                
+                val startInstant = java.time.ZonedDateTime.of(windowStart.atStartOfDay(), zoneId).toInstant()
+                val endInstant = java.time.ZonedDateTime.of(today.plusDays(1).atStartOfDay(), zoneId).toInstant()
+
+                val allSessions = healthConnectManager.getRunningSessions(startInstant, endInstant)
+                
+                if (allSessions.isEmpty()) {
+                    onResult(null, "Không tìm thấy dữ liệu chạy bộ nào trong 3 ngày gần nhất trên Health Connect.")
+                    return@launch
+                }
+
+                // Group sessions by date
+                val sessionsByDate = allSessions.groupBy { session ->
+                    session.startTime.atZone(zoneId).toLocalDate()
+                }
+                
+                val runningTypes = setOf("EASY", "LONG", "TEMPO", "RACE", "INTERVAL", "REPETITION", "RECOVERY")
+                val exactMatches = mutableListOf<ExactMatch>()
+                val shifts = mutableListOf<ProposedShift>()
+
+                for ((sessionDate, sessions) in sessionsByDate) {
+                    val totalDistance = sessions.sumOf { it.distanceKm }
+                    val totalDuration = sessions.sumOf { it.durationMinutes }
+                    
+                    if (totalDistance < 0.5) continue // Coerce at least 0.5km
+
+                    // Find matching uncompleted workout within +-1 day
+                    val candidateDates = listOf(
+                        sessionDate.toString(),
+                        sessionDate.minusDays(1).toString(),
+                        sessionDate.plusDays(1).toString()
+                    )
+                    
+                    for (dateStr in candidateDates) {
+                        val workout = workoutDao.getWorkoutByDate(dateStr)
+                        if (workout != null && !workout.isCompleted && workout.type in runningTypes) {
+                            if (dateStr != sessionDate.toString()) {
+                                // Mismatch: shift required
+                                val workoutOnSessionDate = workoutDao.getWorkoutByDate(sessionDate.toString())
+                                shifts.add(
+                                    ProposedShift(
+                                        workout = workout,
+                                        originalDate = dateStr,
+                                        newDate = sessionDate.toString(),
+                                        workoutOnNewDate = workoutOnSessionDate,
+                                        actualDistanceKm = totalDistance,
+                                        actualDurationMin = totalDuration,
+                                        actualStartTime = sessions.first().startTime.toString()
+                                    )
+                                )
+                            } else {
+                                // Match on exact date
+                                exactMatches.add(
+                                    ExactMatch(
+                                        workout = workout,
+                                        actualDistanceKm = totalDistance,
+                                        actualDurationMin = totalDuration,
+                                        actualStartTime = sessions.first().startTime.toString()
+                                    )
+                                )
+                            }
+                            break // Found match for this session date
+                        }
+                    }
+                }
+
+                if (exactMatches.isEmpty() && shifts.isEmpty()) {
+                    onResult(null, "Tìm thấy ${allSessions.size} buổi chạy nhưng không khớp với bài tập chưa hoàn thành nào trong giáo án.")
+                } else {
+                    onResult(ProposedSync(exactMatches, shifts), null)
+                }
+
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("checkSyncProposed crashed", e)
+                onResult(null, "Đã xảy ra lỗi khi kiểm tra đồng bộ: ${e.message}")
+            }
+        }
+    }
+
+    fun applySync(proposedSync: ProposedSync, onComplete: (String) -> Unit) {
+        com.example.runcoach.utils.AppLogger.d("Applying Proposed Sync: exact=${proposedSync.exactMatches.size}, shifts=${proposedSync.shifts.size}")
+        viewModelScope.launch {
+            try {
+                var syncedCount = 0
+                var totalSyncedKm = 0.0
+                val shiftDescriptions = mutableListOf<String>()
+
+                // 1. Apply exact matches
+                for (match in proposedSync.exactMatches) {
+                    val updated = match.workout.copy(
+                        isCompleted = true,
+                        actualDistanceKm = match.actualDistanceKm,
+                        actualDurationMin = match.actualDurationMin,
+                        completedDate = match.actualStartTime,
+                        syncSource = "HEALTH_CONNECT"
+                    )
+                    workoutDao.update(updated)
+                    syncedCount++
+                    totalSyncedKm += match.actualDistanceKm
+                }
+
+                // 2. Apply shifts & swaps
+                for (shift in proposedSync.shifts) {
+                    val updatedMatchingWorkout = shift.workout.copy(
+                        date = shift.newDate,
+                        weekNumber = shift.workoutOnNewDate?.weekNumber ?: shift.workout.weekNumber,
+                        isCompleted = true,
+                        actualDistanceKm = shift.actualDistanceKm,
+                        actualDurationMin = shift.actualDurationMin,
+                        completedDate = shift.actualStartTime,
+                        syncSource = "HEALTH_CONNECT"
+                    )
+                    
+                    val updatedOtherWorkout = shift.workoutOnNewDate?.copy(
+                        date = shift.originalDate,
+                        weekNumber = shift.workout.weekNumber
+                    )
+                    
+                    // Delete old records first to prevent primary key constraint errors
+                    workoutDao.delete(shift.workout)
+                    if (shift.workoutOnNewDate != null) {
+                        workoutDao.delete(shift.workoutOnNewDate)
+                    }
+                    
+                    // Insert updated records
+                    workoutDao.insert(updatedMatchingWorkout)
+                    if (updatedOtherWorkout != null) {
+                        workoutDao.insert(updatedOtherWorkout)
+                    }
+
+                    val formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM")
+                    val sessionDateFormatted = java.time.LocalDate.parse(shift.newDate).format(formatter)
+                    val originalDateFormatted = java.time.LocalDate.parse(shift.originalDate).format(formatter)
+                    shiftDescriptions.add("Chuyển bài tập ngày $originalDateFormatted sang ngày $sessionDateFormatted (${shift.workout.description})")
+                    
+                    syncedCount++
+                    totalSyncedKm += shift.actualDistanceKm
+                }
+
+                updateWidget()
+
+                var resultMsg = "Đã đồng bộ thành công $syncedCount buổi tập! (Tổng: ${"%,.1f".format(totalSyncedKm)} km)"
+                if (shiftDescriptions.isNotEmpty()) {
+                    resultMsg += "\n\n💡 Lịch tập luyện đã được điều chỉnh:\n" + shiftDescriptions.joinToString("\n") { "• $it" }
+                }
+                onComplete(resultMsg)
+
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("applySync crashed", e)
+                onComplete("Đã xảy ra lỗi khi lưu đồng bộ: ${e.message}")
+            }
+        }
+    }
 
     fun upsertWorkout(workout: WorkoutEntity) {
         viewModelScope.launch {
