@@ -247,12 +247,13 @@ class MainViewModel(
                 val runningTypes = setOf("EASY", "LONG", "TEMPO", "RACE", "INTERVAL", "REPETITION", "RECOVERY")
                 var syncedCount = 0
                 var totalSyncedKm = 0.0
+                val shifts = mutableListOf<String>()
 
                 for ((sessionDate, sessions) in sessionsByDate) {
                     val totalDistance = sessions.sumOf { it.distanceKm }
                     val totalDuration = sessions.sumOf { it.durationMinutes }
                     
-                    if (totalDistance < 0.1) continue
+                    if (totalDistance < 0.5) continue // Coerce at least 0.5km to avoid random short tracks
 
                     // Find matching uncompleted workout within +-1 day
                     val candidateDates = listOf(
@@ -264,26 +265,72 @@ class MainViewModel(
                     for (dateStr in candidateDates) {
                         val workout = workoutDao.getWorkoutByDate(dateStr)
                         if (workout != null && !workout.isCompleted && workout.type in runningTypes) {
-                            val updated = workout.copy(
-                                isCompleted = true,
-                                actualDistanceKm = totalDistance,
-                                actualDurationMin = totalDuration,
-                                completedDate = sessions.first().startTime.toString(),
-                                syncSource = "HEALTH_CONNECT"
-                            )
-                            workoutDao.update(updated)
+                            if (dateStr != sessionDate.toString()) {
+                                // We need to shift this planned workout from dateStr to sessionDate!
+                                val workoutOnSessionDate = workoutDao.getWorkoutByDate(sessionDate.toString())
+                                
+                                val updatedMatchingWorkout = workout.copy(
+                                    date = sessionDate.toString(),
+                                    weekNumber = workoutOnSessionDate?.weekNumber ?: workout.weekNumber,
+                                    isCompleted = true,
+                                    actualDistanceKm = totalDistance,
+                                    actualDurationMin = totalDuration,
+                                    completedDate = sessions.first().startTime.toString(),
+                                    syncSource = "HEALTH_CONNECT"
+                                )
+                                
+                                val updatedOtherWorkout = workoutOnSessionDate?.copy(
+                                    date = workout.date,
+                                    weekNumber = workout.weekNumber
+                                )
+                                
+                                // Delete both old keys first
+                                workoutDao.delete(workout)
+                                if (workoutOnSessionDate != null) {
+                                    workoutDao.delete(workoutOnSessionDate)
+                                }
+                                
+                                // Insert updated ones
+                                workoutDao.insert(updatedMatchingWorkout)
+                                if (updatedOtherWorkout != null) {
+                                    workoutDao.insert(updatedOtherWorkout)
+                                }
+                                
+                                val formatter = java.time.format.DateTimeFormatter.ofPattern("dd/MM")
+                                val sessionDateFormatted = sessionDate.format(formatter)
+                                val originalDateFormatted = java.time.LocalDate.parse(workout.date).format(formatter)
+                                shifts.add("Chuyển bài tập ngày $originalDateFormatted sang ngày $sessionDateFormatted (${workout.description})")
+                                
+                                com.example.runcoach.utils.AppLogger.i(
+                                    "syncRecentWorkouts: Shifted and completed workout from $dateStr to $sessionDate"
+                                )
+                            } else {
+                                // Match on same day, normal update
+                                val updated = workout.copy(
+                                    isCompleted = true,
+                                    actualDistanceKm = totalDistance,
+                                    actualDurationMin = totalDuration,
+                                    completedDate = sessions.first().startTime.toString(),
+                                    syncSource = "HEALTH_CONNECT"
+                                )
+                                workoutDao.update(updated)
+                                com.example.runcoach.utils.AppLogger.i(
+                                    "syncRecentWorkouts: Synced ${totalDistance}km on exact date $sessionDate"
+                                )
+                            }
                             syncedCount++
                             totalSyncedKm += totalDistance
-                            com.example.runcoach.utils.AppLogger.i(
-                                "syncRecentWorkouts: Synced ${totalDistance}km from $sessionDate to workout on $dateStr"
-                            )
-                            break // Found a match for this session, move to next
+                            break // Found a match for this session, move to next date
                         }
                     }
                 }
 
                 if (syncedCount > 0) {
-                    onResult("Đã đồng bộ thành công $syncedCount buổi tập! (Tổng: ${"%,.1f".format(totalSyncedKm)} km)")
+                    var resultMsg = "Đã đồng bộ thành công $syncedCount buổi tập! (Tổng: ${"%,.1f".format(totalSyncedKm)} km)"
+                    if (shifts.isNotEmpty()) {
+                        resultMsg += "\n\n💡 Hệ thống đã tự động điều chỉnh giáo án cho khớp với thực tế chạy:\n" + shifts.joinToString("\n") { "• $it" }
+                    }
+                    onResult(resultMsg)
                 } else {
                     onResult("Tìm thấy ${allSessions.size} buổi chạy nhưng không khớp với bài tập nào trong giáo án.")
                 }

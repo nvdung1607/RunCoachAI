@@ -82,7 +82,7 @@ fun PermissionSetupScreen(
         if (isGranted) {
             Toast.makeText(context, "Đã cấp quyền thông báo thành công", Toast.LENGTH_SHORT).show()
         } else {
-            Toast.makeText(context, "Quyền thông báo bị từ chối. Bạn có thể bật lại sau.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Quyền thông báo bị từ chối. Bạn có thể bật lại sau.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -130,7 +130,7 @@ fun PermissionSetupScreen(
             val details = if (missingPermissions.isNotEmpty()) {
                 "\nThiếu quyền: ${missingPermissions.map { it.substringAfterLast(".") }.joinToString(", ")}"
             } else ""
-            Toast.makeText(context, "Chưa cấp đủ quyền kết nối Health Connect.$details", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "Chưa cấp đủ quyền kết nối Health Connect.$details", Toast.LENGTH_SHORT).show()
         }
     }
 

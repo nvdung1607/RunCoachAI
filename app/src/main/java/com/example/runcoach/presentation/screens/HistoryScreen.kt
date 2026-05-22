@@ -803,7 +803,7 @@ fun EditWorkoutStatsDialog(
                                 val distance = distanceText.toDoubleOrNull() ?: 0.0
                                 val duration = durationText.toDoubleOrNull() ?: 0.0
                                 if (distance <= 0.0 || duration <= 0.0) {
-                                    Toast.makeText(context, "Vui lòng nhập quãng đường và thời gian hợp lệ lớn hơn 0!", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "Vui lòng nhập quãng đường và thời gian hợp lệ lớn hơn 0!", Toast.LENGTH_SHORT).show()
                                     return@Button
                                 }
                                 onConfirm(distance, duration, true)

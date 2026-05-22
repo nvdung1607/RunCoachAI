@@ -479,9 +479,9 @@ fun TestRunScreen(
                     val total3kSeconds = paceMinPerKm * 3.0 * 60.0
                     minText = (total3kSeconds / 60).toInt().toString()
                     secText = (total3kSeconds % 60).toInt().toString()
-                    Toast.makeText(context, "Đã tự lấy kết quả chạy tốt nhất từ Health Connect!", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Đã tự lấy kết quả chạy tốt nhất từ Health Connect!", Toast.LENGTH_SHORT).show()
                 } else {
-                    Toast.makeText(context, "Không tìm thấy bài chạy 3km nào gần đây.", Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, "Không tìm thấy bài chạy 3km nào gần đây.", Toast.LENGTH_SHORT).show()
                 }
             }
         } else {
@@ -808,7 +808,7 @@ fun TestRunScreen(
                     val sec = secText.toIntOrNull() ?: 0
                     val totalSec = min * 60.0 + sec
                     if (totalSec < 360.0 || totalSec > 2400.0) {
-                        Toast.makeText(context, "Nhập thời gian hợp lệ cho 3km (6–40 phút)!", Toast.LENGTH_LONG).show()
+                        Toast.makeText(context, "Nhập thời gian hợp lệ cho 3km (6–40 phút)!", Toast.LENGTH_SHORT).show()
                         return@Button
                     }
 
@@ -947,6 +947,7 @@ fun DashboardScreen(
     var showResetConfirm by remember { mutableStateOf(false) }
     var showNotifSettings by remember { mutableStateOf(false) }
     var showWorkoutDetails by remember { mutableStateOf<WorkoutEntity?>(null) }
+    var syncResultMessage by remember { mutableStateOf<String?>(null) }
     
     // Dialog states for informational popups
     var showRaceDayInfo by remember { mutableStateOf(false) }
@@ -1038,6 +1039,31 @@ fun DashboardScreen(
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
+                    // Health Connect Sync
+                    IconButton(
+                        onClick = {
+                            if (hcPermissionsGranted) {
+                                Toast.makeText(context, "Đang kiểm tra dữ liệu Health Connect...", Toast.LENGTH_SHORT).show()
+                                viewModel.syncRecentWorkouts { msg ->
+                                    syncResultMessage = msg
+                                }
+                            } else {
+                                permissionsLauncher.launch(healthConnectManager.requiredPermissions)
+                            }
+                        },
+                        modifier = Modifier
+                            .size(40.dp)
+                            .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
+                            .border(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f), RoundedCornerShape(10.dp))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Sync,
+                            contentDescription = "Sync Health Connect",
+                            tint = if (hcPermissionsGranted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(14.dp))
                     // Notification settings
                     IconButton(
                         onClick = { showNotifSettings = true },
@@ -1212,19 +1238,6 @@ fun DashboardScreen(
             }
         }
 
-        // Health Connect card
-        item {
-            HealthConnectCard(
-                hcStatus = hcStatus,
-                hcPermissionsGranted = hcPermissionsGranted,
-                onRequestPermissions = { permissionsLauncher.launch(healthConnectManager.requiredPermissions) },
-                onSync = {
-                    viewModel.triggerSync()
-                    Toast.makeText(context, "Bắt đầu đồng bộ từ Health Connect...", Toast.LENGTH_SHORT).show()
-                }
-            )
-        }
-
         // Today's workout
         item {
             Text("Bài tập hôm nay", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
@@ -1327,7 +1340,7 @@ fun DashboardScreen(
                                     onClick = {
                                         Toast.makeText(context, "Đang kiểm tra dữ liệu Health Connect...", Toast.LENGTH_SHORT).show()
                                         viewModel.syncTodayWorkout { msg ->
-                                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                                         }
                                     },
                                     shape = RoundedCornerShape(12.dp),
@@ -1820,6 +1833,21 @@ fun DashboardScreen(
         )
     }
 
+    // Sync result dialog
+    if (syncResultMessage != null) {
+        AlertDialog(
+            onDismissRequest = { syncResultMessage = null },
+            icon = { Icon(Icons.Default.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            title = { Text("Đồng bộ Health Connect") },
+            text = { Text(syncResultMessage!!) },
+            confirmButton = {
+                Button(onClick = { syncResultMessage = null }) {
+                    Text("Đóng")
+                }
+            }
+        )
+    }
+
     // Informational Popups
     if (showRaceDayInfo) {
         val totalWorkouts = workoutsList.count { it.type != "REST" && it.type != "CT" }
@@ -2288,14 +2316,14 @@ fun WeeklyVolumeChart(workoutsList: List<WorkoutEntity>) {
 
             val weeklyStats = remember(workoutsList) {
                 workoutsList.groupBy { it.weekNumber }.map { (week, list) ->
-                    val target = list.sumOf { it.targetDistanceKm }
-                    val actual = list.sumOf { it.actualDistanceKm }
+                    val target = list.count { it.type != "REST" }.toDouble()
+                    val actual = list.count { it.type != "REST" && it.isCompleted }.toDouble()
                     week to Pair(target, actual)
                 }.sortedBy { it.first }
             }
 
             if (weeklyStats.isNotEmpty()) {
-                val maxVolume = weeklyStats.maxOfOrNull { maxOf(it.second.first, it.second.second) }?.coerceAtLeast(10.0) ?: 10.0
+                val maxVolume = weeklyStats.maxOfOrNull { maxOf(it.second.first, it.second.second) }?.coerceAtLeast(1.0) ?: 1.0
 
                 Box(modifier = Modifier.fillMaxWidth().height(140.dp).horizontalScroll(rememberScrollState())) {
                     val barWidth = 28.dp
@@ -2404,8 +2432,8 @@ fun DetailedAnalyticsDialog(
             0 -> { // Week tab
                 workoutsList.groupBy { it.weekNumber }
                     .map { (week, list) ->
-                        val target = list.sumOf { it.targetDistanceKm }
-                        val actual = list.sumOf { it.actualDistanceKm }
+                        val target = list.count { it.type != "REST" }.toDouble()
+                        val actual = list.count { it.type != "REST" && it.isCompleted }.toDouble()
                         AnalyticsChartItem(
                             label = "Tuần $week",
                             target = target,
@@ -2631,6 +2659,7 @@ fun DetailedAnalyticsDialog(
                 DetailedBarChart(
                     items = chartItems,
                     selectedIndex = selectedBarIndex,
+                    unit = if (selectedTab == 0) "buổi" else "km",
                     onBarSelected = { selectedBarIndex = it }
                 )
 
@@ -2840,6 +2869,7 @@ fun PillTabRow(
 fun DetailedBarChart(
     items: List<AnalyticsChartItem>,
     selectedIndex: Int,
+    unit: String = "km",
     onBarSelected: (Int) -> Unit
 ) {
     if (items.isEmpty()) {
@@ -2854,161 +2884,196 @@ fun DetailedBarChart(
         return
     }
 
-    val maxVal = items.maxOfOrNull { maxOf(it.target, it.actual) }?.coerceAtLeast(10.0) ?: 10.0
-    val roundedMax = when {
-        maxVal <= 10.0 -> 10.0
-        maxVal <= 25.0 -> 25.0
-        maxVal <= 50.0 -> 50.0
-        maxVal <= 100.0 -> 100.0
-        else -> ((maxVal / 50.0).toInt() + 1) * 50.0
+    val maxVal = items.maxOfOrNull { maxOf(it.target, it.actual) }?.coerceAtLeast(1.0) ?: 1.0
+    val roundedMax = if (unit == "buổi") {
+        when {
+            maxVal <= 5.0 -> 5.0
+            maxVal <= 7.0 -> 7.0
+            maxVal <= 10.0 -> 10.0
+            else -> maxVal
+        }
+    } else {
+        when {
+            maxVal <= 10.0 -> 10.0
+            maxVal <= 25.0 -> 25.0
+            maxVal <= 50.0 -> 50.0
+            maxVal <= 100.0 -> 100.0
+            else -> ((maxVal / 50.0).toInt() + 1) * 50.0
+        }
     }
 
     val primaryColor = MaterialTheme.colorScheme.primary
     val completedColor = ColorCompleted
-    val warningColor = ColorWarning
     val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
 
-    Box(
+    BoxWithConstraints(
         modifier = Modifier
             .fillMaxWidth()
             .height(220.dp)
             .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
             .padding(top = 16.dp, bottom = 12.dp, start = 8.dp, end = 16.dp)
     ) {
-        Canvas(
-            modifier = Modifier
-                .fillMaxSize()
-                .pointerInput(items) {
-                    detectTapGestures { offset ->
-                        val startXPx = 48.dp.toPx()
-                        val availableWidth = size.width - startXPx
-                        if (offset.x >= startXPx && offset.x <= size.width) {
-                            val colWidth = availableWidth / items.size
-                            val clickedIdx = ((offset.x - startXPx) / colWidth).toInt().coerceIn(0, items.size - 1)
-                            onBarSelected(if (selectedIndex == clickedIdx) -1 else clickedIdx)
-                        } else {
-                            onBarSelected(-1)
-                        }
-                    }
-                }
-        ) {
-            val canvasW = size.width
-            val canvasH = size.height
-            val startX = 48.dp.toPx()
-            val chartW = canvasW - startX
-            val chartH = canvasH - 32.dp.toPx()
+        val totalWidth = maxWidth
+        val yAxisWidth = 48.dp
+        val graphWidth = totalWidth - yAxisWidth
 
-            // 1. Draw Grid Lines and Y-Axis Labels
-            val textPaint = android.graphics.Paint().apply {
-                color = android.graphics.Color.GRAY
-                textSize = 24f
-                textAlign = android.graphics.Paint.Align.RIGHT
-            }
+        val colPreferredWidth = 60.dp
+        val scrollableWidth = maxOf(graphWidth, colPreferredWidth * items.size)
 
-            val gridSteps = 4
-            for (i in 0..gridSteps) {
-                val fraction = i.toFloat() / gridSteps
-                val y = chartH * (1f - fraction)
-                // Grid line
-                drawLine(
-                    color = gridColor,
-                    start = Offset(startX, y),
-                    end = Offset(canvasW, y),
-                    strokeWidth = 1f
-                )
-                // Y label
-                val valLabel = "${(roundedMax * fraction).toInt()}"
-                drawIntoCanvas { canvas ->
-                    textPaint.color = if (i == 0) android.graphics.Color.LTGRAY else android.graphics.Color.GRAY
-                    canvas.nativeCanvas.drawText(
-                        valLabel,
-                        startX - 12f,
-                        y + 8f,
-                        textPaint
-                    )
-                }
-            }
+        Row(modifier = Modifier.fillMaxSize()) {
+            // 1. Static Y-Axis Canvas
+            Canvas(
+                modifier = Modifier
+                    .width(yAxisWidth)
+                    .fillMaxHeight()
+            ) {
+                val canvasW = size.width
+                val canvasH = size.height
+                val chartH = canvasH - 32.dp.toPx()
 
-            // Draw "(km)" label on Y axis top
-            drawIntoCanvas { canvas ->
-                val kmPaint = android.graphics.Paint().apply {
+                val textPaint = android.graphics.Paint().apply {
                     color = android.graphics.Color.GRAY
-                    textSize = 20f
+                    textSize = 24f
                     textAlign = android.graphics.Paint.Align.RIGHT
                 }
-                canvas.nativeCanvas.drawText(
-                    "(km)",
-                    startX - 16f,
-                    -14f,
-                    kmPaint
-                )
-            }
 
-            // 2. Draw Bars
-            val colWidth = chartW / items.size
-            val barSpacing = colWidth * 0.15f
-            val availableBarWidth = colWidth - barSpacing
-            val barW = (availableBarWidth / 2f).coerceAtMost(16.dp.toPx())
-
-            items.forEachIndexed { idx, item ->
-                val colCenterX = startX + idx * colWidth + colWidth / 2f
-
-                // Draw column selection highlight background
-                if (selectedIndex == idx) {
-                    drawRoundRect(
-                        color = primaryColor.copy(alpha = 0.08f),
-                        topLeft = Offset(startX + idx * colWidth, 0f),
-                        size = Size(colWidth, chartH),
-                        cornerRadius = CornerRadius(8f, 8f)
-                    )
-                }
-
-                // A. Target Bar (Gray/Translucent primary outline)
-                val targetH = (item.target / roundedMax * chartH).toFloat().coerceAtLeast(2f)
-                val targetLeft = colCenterX - barW - 2f
-                drawRoundRect(
-                    color = primaryColor.copy(alpha = 0.15f),
-                    topLeft = Offset(targetLeft, chartH - targetH),
-                    size = Size(barW, targetH),
-                    cornerRadius = CornerRadius(6f, 6f)
-                )
-
-                // B. Actual Bar (Solid color based on completion)
-                if (item.actual > 0.0) {
-                    val actualH = (item.actual / roundedMax * chartH).toFloat().coerceAtLeast(2f)
-                    val actualLeft = colCenterX + 2f
-                    val actualColor = if (item.actual >= item.target && item.target > 0.0) completedColor else primaryColor
-
-                    drawRoundRect(
-                        color = actualColor,
-                        topLeft = Offset(actualLeft, chartH - actualH),
-                        size = Size(barW, actualH),
-                        cornerRadius = CornerRadius(6f, 6f)
-                    )
-                }
-
-                // C. X-Axis Labels
-                val displayLabel = if (item.label.startsWith("Tuần ")) {
-                    "T${item.label.substringAfter("Tuần ")}"
-                } else {
-                    item.label
-                }
-
-                val labelPaint = android.graphics.Paint().apply {
-                    color = if (selectedIndex == idx) primaryColor.toArgb() else android.graphics.Color.GRAY
-                    textSize = 22f
-                    textAlign = android.graphics.Paint.Align.CENTER
-                    if (selectedIndex == idx) {
-                        isFakeBoldText = true
+                val gridSteps = 4
+                for (i in 0..gridSteps) {
+                    val fraction = i.toFloat() / gridSteps
+                    val y = chartH * (1f - fraction)
+                    
+                    // Y label
+                    val valLabel = "${(roundedMax * fraction).toInt()}"
+                    drawIntoCanvas { canvas ->
+                        textPaint.color = if (i == 0) android.graphics.Color.LTGRAY else android.graphics.Color.GRAY
+                        canvas.nativeCanvas.drawText(
+                            valLabel,
+                            canvasW - 12f,
+                            y + 8f,
+                            textPaint
+                        )
                     }
                 }
+
+                // Draw unit label on Y axis top
                 drawIntoCanvas { canvas ->
+                    val unitPaint = android.graphics.Paint().apply {
+                        color = android.graphics.Color.GRAY
+                        textSize = 20f
+                        textAlign = android.graphics.Paint.Align.RIGHT
+                    }
                     canvas.nativeCanvas.drawText(
-                        displayLabel,
-                        colCenterX,
-                        canvasH - 6f,
-                        labelPaint
+                        "($unit)",
+                        canvasW - 12f,
+                        -14f,
+                        unitPaint
                     )
+                }
+            }
+
+            // 2. Horizontally Scrollable Graph Canvas
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .fillMaxHeight()
+                    .horizontalScroll(rememberScrollState())
+            ) {
+                Canvas(
+                    modifier = Modifier
+                        .width(scrollableWidth)
+                        .fillMaxHeight()
+                        .pointerInput(items) {
+                            detectTapGestures { offset ->
+                                val colWidthPx = size.width / items.size
+                                val clickedIdx = (offset.x / colWidthPx).toInt().coerceIn(0, items.size - 1)
+                                onBarSelected(if (selectedIndex == clickedIdx) -1 else clickedIdx)
+                            }
+                        }
+                ) {
+                    val canvasW = size.width
+                    val canvasH = size.height
+                    val chartH = canvasH - 32.dp.toPx()
+
+                    // Draw Grid Lines
+                    val gridSteps = 4
+                    for (i in 0..gridSteps) {
+                        val fraction = i.toFloat() / gridSteps
+                        val y = chartH * (1f - fraction)
+                        drawLine(
+                            color = gridColor,
+                            start = Offset(0f, y),
+                            end = Offset(canvasW, y),
+                            strokeWidth = 1f
+                        )
+                    }
+
+                    // Draw Bars
+                    val colWidth = canvasW / items.size
+                    val barSpacing = colWidth * 0.15f
+                    val availableBarWidth = colWidth - barSpacing
+                    val barW = (availableBarWidth / 2f).coerceAtMost(16.dp.toPx())
+
+                    items.forEachIndexed { idx, item ->
+                        val colCenterX = idx * colWidth + colWidth / 2f
+
+                        // Draw column selection highlight background
+                        if (selectedIndex == idx) {
+                            drawRoundRect(
+                                color = primaryColor.copy(alpha = 0.08f),
+                                topLeft = Offset(idx * colWidth, 0f),
+                                size = Size(colWidth, chartH),
+                                cornerRadius = CornerRadius(8f, 8f)
+                            )
+                        }
+
+                        // A. Target Bar (Gray/Translucent primary outline)
+                        val targetH = (item.target / roundedMax * chartH).toFloat().coerceAtLeast(2f)
+                        val targetLeft = colCenterX - barW - 2f
+                        drawRoundRect(
+                            color = primaryColor.copy(alpha = 0.15f),
+                            topLeft = Offset(targetLeft, chartH - targetH),
+                            size = Size(barW, targetH),
+                            cornerRadius = CornerRadius(6f, 6f)
+                        )
+
+                        // B. Actual Bar (Solid color based on completion)
+                        if (item.actual > 0.0) {
+                            val actualH = (item.actual / roundedMax * chartH).toFloat().coerceAtLeast(2f)
+                            val actualLeft = colCenterX + 2f
+                            val actualColor = if (item.actual >= item.target && item.target > 0.0) completedColor else primaryColor
+
+                            drawRoundRect(
+                                color = actualColor,
+                                topLeft = Offset(actualLeft, chartH - actualH),
+                                size = Size(barW, actualH),
+                                cornerRadius = CornerRadius(6f, 6f)
+                            )
+                        }
+
+                        // C. X-Axis Labels
+                        val displayLabel = if (item.label.startsWith("Tuần ")) {
+                            "T${item.label.substringAfter("Tuần ")}"
+                        } else {
+                            item.label
+                        }
+
+                        val labelPaint = android.graphics.Paint().apply {
+                            color = if (selectedIndex == idx) primaryColor.toArgb() else android.graphics.Color.GRAY
+                            textSize = 22f
+                            textAlign = android.graphics.Paint.Align.CENTER
+                            if (selectedIndex == idx) {
+                                isFakeBoldText = true
+                            }
+                        }
+                        drawIntoCanvas { canvas ->
+                            canvas.nativeCanvas.drawText(
+                                displayLabel,
+                                colCenterX,
+                                canvasH - 6f,
+                                labelPaint
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -3093,7 +3158,7 @@ fun NotificationSettingsDialog(
             enabled = true
         } else {
             enabled = false
-            Toast.makeText(context, "⚠️ Cần cấp quyền thông báo trong cài đặt để nhận nhắc nhở chạy bộ.", Toast.LENGTH_LONG).show()
+            Toast.makeText(context, "⚠️ Cần cấp quyền thông báo trong cài đặt để nhận nhắc nhở chạy bộ.", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -3190,7 +3255,7 @@ fun NotificationSettingsDialog(
                                     Manifest.permission.POST_NOTIFICATIONS
                                 ) == PackageManager.PERMISSION_GRANTED
                                 if (!hasPerm) {
-                                    Toast.makeText(context, "⚠️ Vui lòng cấp quyền thông báo để lưu cài đặt này.", Toast.LENGTH_LONG).show()
+                                    Toast.makeText(context, "⚠️ Vui lòng cấp quyền thông báo để lưu cài đặt này.", Toast.LENGTH_SHORT).show()
                                     permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                                     return@Button
                                 }
@@ -3253,7 +3318,7 @@ fun PlanScreen(
                 context = context,
                 uri = uri,
                 onSuccess = { msg ->
-                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                    Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
                 },
                 onError = { err ->
                     val builder = android.app.AlertDialog.Builder(context)
@@ -3477,7 +3542,7 @@ fun PlanScreen(
                 ) { result, conflictDesc ->
                     when (result) {
                         0 -> Toast.makeText(context, "✅ Đã dời bài tập sang $newDate", Toast.LENGTH_SHORT).show()
-                        1 -> Toast.makeText(context, "⚠️ Đã dời sang $newDate (ngày đó đã có: $conflictDesc)", Toast.LENGTH_LONG).show()
+                        1 -> Toast.makeText(context, "⚠️ Đã dời sang $newDate (ngày đó đã có: $conflictDesc)", Toast.LENGTH_SHORT).show()
                         else -> Toast.makeText(context, "❌ Không tìm thấy bài tập gốc.", Toast.LENGTH_SHORT).show()
                     }
                 }
