@@ -23,6 +23,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -420,12 +421,27 @@ fun CustomPlanScreen(
                                                     .fillMaxHeight()
                                                     .clip(RoundedCornerShape(20.dp))
                                                     .background(
-                                                        if (selected) MaterialTheme.colorScheme.primary
-                                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                                        if (selected) {
+                                                            when (g) {
+                                                                "MALE" -> Color(0xFF3B82F6)
+                                                                "FEMALE" -> Color(0xFFEC4899)
+                                                                else -> Color(0xFF8B5CF6)
+                                                            }
+                                                        } else {
+                                                            MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                                        }
                                                     )
                                                     .border(
                                                         1.dp,
-                                                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                                        if (selected) {
+                                                            when (g) {
+                                                                "MALE" -> Color(0xFF3B82F6)
+                                                                "FEMALE" -> Color(0xFFEC4899)
+                                                                else -> Color(0xFF8B5CF6)
+                                                            }
+                                                        } else {
+                                                            MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
+                                                        },
                                                         RoundedCornerShape(20.dp)
                                                     )
                                                     .clickable { gender = g },
@@ -438,14 +454,14 @@ fun CustomPlanScreen(
                                                     Icon(
                                                         imageVector = icon,
                                                         contentDescription = label,
-                                                        tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                                        tint = if (selected) Color.White else MaterialTheme.colorScheme.onSurface,
                                                         modifier = Modifier.size(20.dp)
                                                     )
                                                     Text(
                                                         text = label,
                                                         fontSize = 10.sp,
                                                         fontWeight = FontWeight.Bold,
-                                                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                        color = if (selected) Color.White else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                                     )
                                                 }
                                             }
@@ -454,20 +470,14 @@ fun CustomPlanScreen(
                                 }
 
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Text(
-                                        text = "Tuổi",
-                                        fontSize = 12.sp,
-                                        fontWeight = FontWeight.Medium,
-                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
-                                    )
+                                    Spacer(modifier = Modifier.height(20.dp))
                                     OutlinedTextField(
                                         value = if (age > 0) age.toString() else "",
                                         onValueChange = {
                                             val clean = it.filter { c -> c.isDigit() }
                                             age = clean.toIntOrNull() ?: 0
                                         },
-                                        placeholder = { Text("Tuổi") },
+                                        label = { Text("Tuổi") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         singleLine = true,
                                         shape = RoundedCornerShape(20.dp),
@@ -645,7 +655,14 @@ fun CustomPlanScreen(
         // Drag preview overlay
         if (dragAndDropState.isDragging && dragAndDropState.dragItem != null) {
             val dragItem = dragAndDropState.dragItem!!
-            val offset = dragAndDropState.currentDragPosition - Offset(150f, 60f)
+            val offset = dragAndDropState.currentDragPosition - dragAndDropState.localTouchOffset
+            val density = LocalDensity.current
+            val itemRect = dragAndDropState.itemBounds[dragItem.date]
+            val itemWidth = if (itemRect != null) {
+                with(density) { itemRect.width.toDp() }
+            } else {
+                320.dp
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -654,15 +671,15 @@ fun CustomPlanScreen(
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
-                        .width(320.dp)
-                        .shadow(16.dp, RoundedCornerShape(12.dp))
+                        .width(itemWidth)
+                        .shadow(16.dp, RoundedCornerShape(16.dp))
                         .alpha(1.0f)
                 ) {
                     CustomWorkoutCard(
                         workout = dragItem,
                         onEdit = {},
                         onDelete = {},
-                        isDragging = true
+                        isDragging = false
                     )
                 }
             }

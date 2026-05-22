@@ -76,6 +76,7 @@ class MainActivity : ComponentActivity() {
             val userPrefs by viewModel.userPreferences.collectAsState()
             val context = LocalContext.current
             var isInitialLoadComplete by remember { mutableStateOf(false) }
+            var startDestination by remember { mutableStateOf<String?>(null) }
 
             val healthConnectManager = remember { HealthConnectManager(context) }
             var hasCheckedPermissions by remember { mutableStateOf(false) }
@@ -100,6 +101,7 @@ class MainActivity : ComponentActivity() {
             val isHcAvailable = hcStatus == HealthConnectClient.SDK_AVAILABLE
 
             LaunchedEffect(Unit) {
+                var computedStartDestination = "onboarding"
                 try {
                     // Force suspension until DataStore finishes loading preference files from disk
                     val repository = (application as RunCoachApplication).userPreferencesRepository
@@ -121,14 +123,24 @@ class MainActivity : ComponentActivity() {
                     hasCheckedPermissions = true
 
                     val isHcOk = hcPermissionsGranted || !isHcAvailable
-                    if (hasNotificationPermission && isHcOk && !initialPrefs.hasCompletedPermissionSetup && initialPrefs.raceDate.isNotEmpty()) {
+                    val isAllPermissionsGranted = hasNotificationPermission && isHcOk
+                    if (isAllPermissionsGranted && !initialPrefs.hasCompletedPermissionSetup) {
                         com.example.runcoach.utils.AppLogger.d("All permissions already granted. Auto-completing permission setup.")
                         viewModel.completePermissionSetup()
+                    }
+
+                    computedStartDestination = when {
+                        !isAllPermissionsGranted -> "permission_setup"
+                        initialPrefs.raceDate.isEmpty() -> "onboarding"
+                        !initialPrefs.hasCompletedTestRun -> "test_run"
+                        else -> "dashboard"
                     }
                 } catch (e: Exception) {
                     com.example.runcoach.utils.AppLogger.e("LaunchedEffect init failed", e)
                     hasCheckedPermissions = true
+                    computedStartDestination = "onboarding"
                 } finally {
+                    startDestination = computedStartDestination
                     // Always mark loading complete so the screen is shown
                     isInitialLoadComplete = true
                 }
@@ -142,26 +154,12 @@ class MainActivity : ComponentActivity() {
 
             RunCoachTheme(darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    if (!isInitialLoadComplete) {
+                    if (!isInitialLoadComplete || startDestination == null) {
                         // Keep screen blank matching the theme color during preference loading to avoid UI flicker
                         return@Surface
                     }
 
                     val navController = rememberNavController()
-
-                    val startDestination = when {
-                        userPrefs.raceDate.isEmpty() -> "onboarding"
-                        !userPrefs.hasCompletedPermissionSetup -> {
-                            val isHcOk = hcPermissionsGranted || !isHcAvailable
-                            if (hasCheckedPermissions && hasNotificationPermission && isHcOk) {
-                                if (!userPrefs.hasCompletedTestRun) "test_run" else "dashboard"
-                            } else {
-                                "permission_setup"
-                            }
-                        }
-                        !userPrefs.hasCompletedTestRun -> "test_run"
-                        else -> "dashboard"
-                    }
 
                     val navBackStackEntry by navController.currentBackStackEntryAsState()
                     val currentRoute = navBackStackEntry?.destination?.route
@@ -237,7 +235,7 @@ class MainActivity : ComponentActivity() {
                         NavHost(
                             modifier = Modifier.padding(bottom = innerPadding.calculateBottomPadding()),
                             navController = navController,
-                            startDestination = startDestination,
+                            startDestination = startDestination ?: "onboarding",
                         enterTransition = {
                             slideInHorizontally(
                                 initialOffsetX = { it },
@@ -267,9 +265,7 @@ class MainActivity : ComponentActivity() {
                             OnboardingScreen(
                                 viewModel = viewModel,
                                 onNavigateToTestRun = {
-                                    navController.navigate("permission_setup") {
-                                        popUpTo("onboarding") { inclusive = true }
-                                    }
+                                    navController.navigate("test_run")
                                 }
                             )
                         }
@@ -278,8 +274,14 @@ class MainActivity : ComponentActivity() {
                             PermissionSetupScreen(
                                 viewModel = viewModel,
                                 onNavigateNext = {
-                                    navController.navigate("test_run") {
-                                        popUpTo("permission_setup") { inclusive = true }
+                                    if (userPrefs.raceDate.isEmpty()) {
+                                        navController.navigate("onboarding") {
+                                            popUpTo("permission_setup") { inclusive = true }
+                                        }
+                                    } else {
+                                        navController.navigate("test_run") {
+                                            popUpTo("permission_setup") { inclusive = true }
+                                        }
                                     }
                                 }
                             )
@@ -290,12 +292,19 @@ class MainActivity : ComponentActivity() {
                                 viewModel = viewModel,
                                 onNavigateToDashboard = {
                                     navController.navigate("dashboard") {
-                                        popUpTo("test_run") { inclusive = true }
+                                        popUpTo(0) { inclusive = true }
                                     }
                                 },
                                 onNavigateToOnboarding = {
                                     navController.navigate("onboarding") {
                                         popUpTo(0) { inclusive = true }
+                                    }
+                                },
+                                onNavigateBack = {
+                                    if (!navController.popBackStack()) {
+                                        navController.navigate("onboarding") {
+                                            popUpTo(0) { inclusive = true }
+                                        }
                                     }
                                 }
                             )

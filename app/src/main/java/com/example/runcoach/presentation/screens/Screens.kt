@@ -39,6 +39,7 @@ import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -338,17 +339,23 @@ fun OnboardingScreen(
                     ) {
                         listOf("♂️ Nam" to "MALE", "♀️ Nữ" to "FEMALE", "⚧️ Khác" to "OTHER").forEach { (label, value) ->
                             val isSelected = gender == value
+                            val selectedBgColor = when (value) {
+                                "MALE" -> Color(0xFF3B82F6)
+                                "FEMALE" -> Color(0xFFEC4899)
+                                "OTHER" -> Color(0xFF8B5CF6)
+                                else -> MaterialTheme.colorScheme.primary
+                            }
                             Box(
                                 modifier = Modifier
                                     .weight(1f)
                                     .clip(RoundedCornerShape(12.dp))
                                     .background(
-                                        if (isSelected) MaterialTheme.colorScheme.primary
+                                        if (isSelected) selectedBgColor
                                         else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
                                     )
                                     .border(
                                         width = 1.dp,
-                                        color = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
+                                        color = if (isSelected) selectedBgColor else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f),
                                         shape = RoundedCornerShape(12.dp)
                                     )
                                     .clickable { gender = value }
@@ -360,7 +367,7 @@ fun OnboardingScreen(
                                     fontSize = 13.sp,
                                     fontWeight = FontWeight.Bold,
                                     textAlign = TextAlign.Center,
-                                    color = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                    color = if (isSelected) Color.White else MaterialTheme.colorScheme.onSurface
                                 )
                             }
                         }
@@ -468,7 +475,8 @@ fun OnboardingScreen(
 fun TestRunScreen(
     viewModel: MainViewModel,
     onNavigateToDashboard: () -> Unit,
-    onNavigateToOnboarding: () -> Unit
+    onNavigateToOnboarding: () -> Unit,
+    onNavigateBack: () -> Unit
 ) {
     val userPrefs by viewModel.userPreferences.collectAsState()
     var minText by remember { mutableStateOf("") }
@@ -532,7 +540,20 @@ fun TestRunScreen(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Start
+            ) {
+                IconButton(onClick = onNavigateBack) {
+                    Icon(
+                        imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = "Back",
+                        tint = MaterialTheme.colorScheme.onBackground
+                    )
+                }
+            }
+            Spacer(modifier = Modifier.height(8.dp))
             Box(
                 modifier = Modifier
                     .size(80.dp)
@@ -605,7 +626,8 @@ fun TestRunScreen(
                             Card(
                                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.08f)),
                                 shape = RoundedCornerShape(12.dp),
-                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f))
+                                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                                modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
@@ -3438,6 +3460,13 @@ fun PlanScreen(
         if (dragAndDropState.isDragging && dragAndDropState.dragItem != null) {
             val dragItem = dragAndDropState.dragItem!!
             val offset = dragAndDropState.currentDragPosition - dragAndDropState.localTouchOffset
+            val density = LocalDensity.current
+            val itemRect = dragAndDropState.itemBounds[dragItem.date]
+            val itemWidth = if (itemRect != null) {
+                with(density) { itemRect.width.toDp() }
+            } else {
+                LocalConfiguration.current.screenWidthDp.dp - 32.dp
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -3446,7 +3475,7 @@ fun PlanScreen(
                 Box(
                     modifier = Modifier
                         .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
-                        .width(LocalConfiguration.current.screenWidthDp.dp - 32.dp)
+                        .width(itemWidth)
                         .shadow(16.dp, RoundedCornerShape(12.dp))
                         .alpha(1.0f)
                 ) {
@@ -3454,7 +3483,7 @@ fun PlanScreen(
                         workout = dragItem,
                         onReschedule = {},
                         onClick = {},
-                        isDragging = true
+                        isDragging = false
                     )
                 }
             }
