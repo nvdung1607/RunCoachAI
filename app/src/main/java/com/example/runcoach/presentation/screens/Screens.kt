@@ -1354,9 +1354,23 @@ fun DashboardScreen(
                                 }
                                 OutlinedButton(
                                     onClick = {
-                                        Toast.makeText(context, "Đang kiểm tra dữ liệu Health Connect...", Toast.LENGTH_SHORT).show()
-                                        viewModel.syncTodayWorkout { msg ->
-                                            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+                                        if (hcPermissionsGranted) {
+                                            Toast.makeText(context, "Đang quét dữ liệu Health Connect...", Toast.LENGTH_SHORT).show()
+                                            viewModel.checkSyncProposed { proposal, error ->
+                                                if (error != null) {
+                                                    syncResultMessage = error
+                                                } else if (proposal != null) {
+                                                    if (proposal.shifts.isNotEmpty()) {
+                                                        pendingSyncProposal = proposal
+                                                    } else {
+                                                        viewModel.applySync(proposal) { msg ->
+                                                            syncResultMessage = msg
+                                                        }
+                                                    }
+                                                }
+                                            }
+                                        } else {
+                                            permissionsLauncher.launch(healthConnectManager.requiredPermissions)
                                         }
                                     },
                                     shape = RoundedCornerShape(12.dp),
