@@ -28,7 +28,7 @@ object PlanFeasibilityChecker {
             // Check for extreme case: very short duration or low fitness
             if (level == FitnessLevel.BEGINNER || paceMinKm >= 8.0 || vdot < 25.0) {
                 if (weeks < 16) {
-                    val warning = "Chu kỳ chuẩn bị hiện tại là $weeks tuần với thể trạng hiện tại (chạy 3km hết ${String.format("%.1f", time3kSeconds / 60.0)} phút, pace ${String.format("%.2f", paceMinKm)}/km) là cực kỳ khó khả thi và có nguy cơ cao gây chấn thương nghiêm trọng."
+                    val warning = "Chu kỳ chuẩn bị hiện tại là $weeks tuần với thể trạng hiện tại (chạy 3km hết ${String.format("%.1f", time3kSeconds / 60.0)} phút, pace ${VdotCalculator.formatPace((time3kSeconds / 3.0).toInt())}) là cực kỳ khó khả thi và có nguy cơ cao gây chấn thương nghiêm trọng."
                     val recommendation = "Đối với cự ly Marathon (42km) cho người mới:\n" +
                             "• Thời gian chuẩn bị khuyên dùng tối thiểu là 16-24 tuần (khoảng 4-6 tháng) để cơ thể tích lũy hệ cơ xương khớp.\n" +
                             "• Bạn nên bắt đầu bằng cách chọn mục tiêu cự ly ngắn hơn như 5km hoặc 10km để làm quen, hoặc kéo dài thời gian chuẩn bị bằng cách chọn ngày đua xa hơn."

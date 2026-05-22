@@ -263,7 +263,7 @@ fun CustomWorkoutCard(
                     )
                     if (workout.type != "REST") {
                         val paceStr = if (workout.targetPaceSec > 0) {
-                            " @ " + VdotCalculator.formatPace(workout.targetPaceSec)
+                            " - Pace: " + VdotCalculator.formatPace(workout.targetPaceSec)
                         } else ""
                         Text(
                             text = "${workout.targetDistanceKm} km$paceStr",

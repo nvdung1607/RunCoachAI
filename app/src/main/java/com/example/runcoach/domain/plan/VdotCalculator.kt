@@ -93,7 +93,7 @@ object VdotCalculator {
     fun formatPace(paceSeconds: Int): String {
         val minutes = paceSeconds / 60
         val seconds = paceSeconds % 60
-        return String.format("%d:%02d/km", minutes, seconds)
+        return String.format("%d:%02d phút/km", minutes, seconds)
     }
 
     /**

@@ -33,9 +33,9 @@ class VdotCalculatorTest {
     @Test
     fun testFormatPace() {
         val formatted = VdotCalculator.formatPace(485) // 8 minutes 5 seconds
-        assertEquals("8:05/km", formatted)
+        assertEquals("8:05 phút/km", formatted)
         
         val formatted2 = VdotCalculator.formatPace(360) // 6 minutes 0 seconds
-        assertEquals("6:00/km", formatted2)
+        assertEquals("6:00 phút/km", formatted2)
     }
 }

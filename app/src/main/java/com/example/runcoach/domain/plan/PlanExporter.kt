@@ -70,10 +70,10 @@ object PlanExporter {
                     val paceStr = if (w.targetPaceSec > 0) {
                         val m = w.targetPaceSec / 60
                         val s = w.targetPaceSec % 60
-                        " @ %d:%02d/km".format(m, s)
+                        " - Pace: %d:%02d phút/km".format(m, s)
                     } else ""
                     val completedStr = if (w.isCompleted) " ✓" else ""
-                    sb.appendLine("  ${w.date}: [${w.type}] ${w.targetDistanceKm}km$paceStr$completedStr")
+                    sb.appendLine("  ${w.date}: [${w.type}] ${w.targetDistanceKm} km$paceStr$completedStr")
                     sb.appendLine("    ${w.description}")
                 }
             }
@@ -156,7 +156,7 @@ object PlanExporter {
                 val paceStr = if (workout.targetPaceSec > 0 && workout.type != "REST") {
                     val m = workout.targetPaceSec / 60
                     val s = workout.targetPaceSec % 60
-                    "%d:%02d/km".format(m, s)
+                    "%d:%02d phút/km".format(m, s)
                 } else "-"
                 canvas.drawText(paceStr, 300f, y, textPaint)
 

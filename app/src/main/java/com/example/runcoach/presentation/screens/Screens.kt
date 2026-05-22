@@ -599,8 +599,8 @@ fun TestRunScreen(
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
-                                        text = "Easy: ${VdotCalculator.formatPace(pacesPreview.easyPaceSec)}/km   " +
-                                            "Tempo: ${VdotCalculator.formatPace(pacesPreview.tempoPaceSec)}/km",
+                                        text = "Easy: ${VdotCalculator.formatPace(pacesPreview.easyPaceSec)}   " +
+                                            "Tempo: ${VdotCalculator.formatPace(pacesPreview.tempoPaceSec)}",
                                         fontSize = 11.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
                                     )
@@ -1273,7 +1273,7 @@ fun DashboardScreen(
                         if (workout.targetDistanceKm > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "🎯 Mục tiêu: ${workout.targetDistanceKm}km @ ${VdotCalculator.formatPace(workout.targetPaceSec)}",
+                                "🎯 Mục tiêu: Cự ly ${workout.targetDistanceKm} km - Pace: ${VdotCalculator.formatPace(workout.targetPaceSec)}",
                                 fontSize = 14.sp,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
@@ -1434,7 +1434,7 @@ fun DashboardScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Mục tiêu: ${workout.targetDistanceKm} km @ ${VdotCalculator.formatPace(workout.targetPaceSec)} min/km",
+                                text = "Mục tiêu: Cự ly ${workout.targetDistanceKm} km - Pace: ${VdotCalculator.formatPace(workout.targetPaceSec)}",
                                 fontSize = 12.5.sp,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary
@@ -1462,6 +1462,49 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            OutlinedButton(
+                                onClick = {
+                                    val current = logDistanceText.toDoubleOrNull() ?: 0.0
+                                    val newVal = (current - 0.1).coerceAtLeast(0.0)
+                                    logDistanceText = String.format(java.util.Locale.US, "%.1f", newVal)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("-0.1km", fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    logDistanceText = workout.targetDistanceKm.toString()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1.2f)
+                            ) {
+                                Text("Đúng mục tiêu", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val current = logDistanceText.toDoubleOrNull() ?: 0.0
+                                    logDistanceText = String.format(java.util.Locale.US, "%.1f", current + 0.1)
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("+0.1km", fontSize = 11.sp)
+                            }
+                        }
                     }
                     
                     Spacer(modifier = Modifier.height(14.dp))
@@ -1487,63 +1530,49 @@ fun DashboardScreen(
                             shape = RoundedCornerShape(12.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
-                    }
-
-                    Spacer(modifier = Modifier.height(16.dp))
-
-                    // Exactly 3 Helper Buttons
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
-                        // Button 1: Đúng mục tiêu
-                        val targetDurationMin = ((workout.targetDistanceKm * workout.targetPaceSec) / 60.0).toInt()
-                        Button(
-                            onClick = {
-                                logDistanceText = workout.targetDistanceKm.toString()
-                                logDurationText = targetDurationMin.toString()
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.primaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            ),
-                            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
-                            modifier = Modifier.weight(1.2f)
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(6.dp),
+                            modifier = Modifier.fillMaxWidth()
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.Flag,
-                                contentDescription = null,
-                                modifier = Modifier.size(16.dp)
-                            )
-                            Spacer(modifier = Modifier.width(4.dp))
-                            Text("Đúng mục tiêu", fontSize = 11.sp, fontWeight = FontWeight.Bold)
-                        }
-
-                        // Button 2: +0.5 km
-                        OutlinedButton(
-                            onClick = {
-                                val current = logDistanceText.toDoubleOrNull() ?: 0.0
-                                logDistanceText = String.format(java.util.Locale.US, "%.1f", current + 0.5)
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                            modifier = Modifier.weight(0.9f)
-                        ) {
-                            Text("+0.5 km", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
-                        }
-
-                        // Button 3: +5 phút
-                        OutlinedButton(
-                            onClick = {
-                                val current = logDurationText.toIntOrNull() ?: 0
-                                logDurationText = (current + 5).toString()
-                            },
-                            shape = RoundedCornerShape(10.dp),
-                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 8.dp),
-                            modifier = Modifier.weight(0.9f)
-                        ) {
-                            Text("+5 phút", fontSize = 11.sp, fontWeight = FontWeight.SemiBold)
+                            OutlinedButton(
+                                onClick = {
+                                    val current = logDurationText.toIntOrNull() ?: 0
+                                    val newVal = (current - 1).coerceAtLeast(0)
+                                    logDurationText = newVal.toString()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("-1 phút", fontSize = 11.sp)
+                            }
+                            Button(
+                                onClick = {
+                                    val targetDurationMin = ((workout.targetDistanceKm * workout.targetPaceSec) / 60.0).toInt()
+                                    logDurationText = targetDurationMin.toString()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                    contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                ),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1.2f)
+                            ) {
+                                Text("Đúng mục tiêu", fontSize = 11.sp, fontWeight = FontWeight.Bold)
+                            }
+                            OutlinedButton(
+                                onClick = {
+                                    val current = logDurationText.toIntOrNull() ?: 0
+                                    logDurationText = (current + 1).toString()
+                                },
+                                shape = RoundedCornerShape(8.dp),
+                                contentPadding = PaddingValues(horizontal = 4.dp, vertical = 4.dp),
+                                modifier = Modifier.weight(1f)
+                            ) {
+                                Text("+1 phút", fontSize = 11.sp)
+                            }
                         }
                     }
                     
@@ -1582,7 +1611,7 @@ fun DashboardScreen(
                                     )
                                     Spacer(modifier = Modifier.width(6.dp))
                                     Text(
-                                        text = "Pace trung bình thực tế: $paceStr /km",
+                                        text = "Pace trung bình thực tế: $paceStr",
                                         fontSize = 13.sp,
                                         fontWeight = FontWeight.Bold,
                                         color = paceColor
@@ -1932,7 +1961,7 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Text("🟢 Easy Pace (${VdotCalculator.formatPace(userPrefs.easyPaceSec)}/km)", fontWeight = FontWeight.Bold, color = ColorEasy)
+                            Text("🟢 Easy Pace (${VdotCalculator.formatPace(userPrefs.easyPaceSec)})", fontWeight = FontWeight.Bold, color = ColorEasy)
                             Text("Chạy thả lỏng, nhịp tim vùng 2. Xây dựng sức bền hiếu khí nền tảng.", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
                             Text("Trong giáo án: $easyCount buổi (Đóng góp vào $pctEasy% khối lượng nhẹ)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
@@ -1944,7 +1973,7 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Text("🔵 Long Run Pace (${VdotCalculator.formatPace(userPrefs.longPaceSec)}/km)", fontWeight = FontWeight.Bold, color = ColorLong)
+                            Text("🔵 Long Run Pace (${VdotCalculator.formatPace(userPrefs.longPaceSec)})", fontWeight = FontWeight.Bold, color = ColorLong)
                             Text("Bài chạy dài cuối tuần. Giúp cơ thể làm quen với việc đốt mỡ và sức chịu đựng cơ bắp.", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
                             Text("Trong giáo án: $longCount buổi", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }
@@ -1956,7 +1985,7 @@ fun DashboardScreen(
                         modifier = Modifier.fillMaxWidth()
                     ) {
                         Column(modifier = Modifier.padding(14.dp)) {
-                            Text("🔴 Tempo/Race Pace (${VdotCalculator.formatPace(userPrefs.tempoPaceSec)}/km)", fontWeight = FontWeight.Bold, color = ColorTempo)
+                            Text("🔴 Tempo/Race Pace (${VdotCalculator.formatPace(userPrefs.tempoPaceSec)})", fontWeight = FontWeight.Bold, color = ColorTempo)
                             Text("Chạy ở ngưỡng yếm khí (Lactate Threshold). Dạy cơ thể chạy nhanh hơn mà không bị mỏi.", fontSize = 13.sp, modifier = Modifier.padding(vertical = 4.dp))
                             Text("Trong giáo án: $tempoCount buổi (Chiếm $pctTempo% cường độ cao)", fontSize = 13.sp, fontWeight = FontWeight.Medium)
                         }

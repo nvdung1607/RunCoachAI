@@ -381,7 +381,7 @@ fun SelectedDayDetail(date: LocalDate, workout: WorkoutEntity, onClick: () -> Un
                 )
                 if (workout.targetDistanceKm > 0) {
                     Text(
-                        text = "${workout.targetDistanceKm}km · ${com.example.runcoach.domain.plan.VdotCalculator.formatPace(workout.targetPaceSec)}",
+                        text = "${workout.targetDistanceKm} km - Pace: ${com.example.runcoach.domain.plan.VdotCalculator.formatPace(workout.targetPaceSec)}",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
