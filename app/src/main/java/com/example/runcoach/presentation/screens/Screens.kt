@@ -400,33 +400,6 @@ fun OnboardingScreen(
                             lineHeight = 16.sp
                         )
                     }
-
-                    Spacer(modifier = Modifier.height(20.dp))
-
-                    Text("Mức độ hoạt động hiện tại", fontSize = 14.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    listOf(
-                        "SEDENTARY" to "💼 Ít vận động (công việc văn phòng)",
-                        "ACTIVE" to "🧘 Hoạt động khác (gym, yoga, bơi lội,...)",
-                        "RUNNER" to "🏃 Đã chạy bộ trước đây"
-                    ).forEach { (key, label) ->
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(
-                                    if (activityLevel == key) MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-                                    else Color.Transparent
-                                )
-                                .clickable { activityLevel = key }
-                                .padding(vertical = 8.dp, horizontal = 4.dp)
-                        ) {
-                            RadioButton(selected = (activityLevel == key), onClick = { activityLevel = key })
-                            Spacer(modifier = Modifier.width(8.dp))
-                            Text(label, fontSize = 13.sp, color = MaterialTheme.colorScheme.onSurface)
-                        }
-                    }
                 }
             }
 

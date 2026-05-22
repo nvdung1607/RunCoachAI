@@ -282,7 +282,7 @@ fun PermissionSetupScreen(
                                     ),
                                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp)
                                 ) {
-                                    Text("Cấp quyền thông báo", fontSize = 12.sp, color = Color.Black)
+                                    Text("Cấp quyền thông báo", fontSize = 12.sp, color = Color.White)
                                 }
                             }
                         }
