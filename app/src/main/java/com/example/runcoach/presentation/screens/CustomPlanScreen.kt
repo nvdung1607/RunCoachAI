@@ -688,89 +688,21 @@ fun CustomPlanScreen(
 
     // Swap confirmation dialog
     if (showSwapConfirmation && swapSourceWorkout != null && swapTargetWorkout != null) {
-        Dialog(
-            onDismissRequest = { showSwapConfirmation = false },
-            properties = DialogProperties(usePlatformDefaultWidth = false)
-        ) {
-            Card(
-                shape = RoundedCornerShape(24.dp),
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                modifier = Modifier
-                    .fillMaxWidth(0.92f)
-                    .padding(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier.padding(20.dp),
-                    verticalArrangement = Arrangement.spacedBy(14.dp)
-                ) {
-                    Text(
-                        text = "Đổi lịch tập luyện",
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 18.sp,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-
-                    val dateAStr = try {
-                        val d = LocalDate.parse(swapSourceWorkout!!.date)
-                        val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
-                        "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
-                    } catch (e: Exception) { swapSourceWorkout!!.date }
-
-                    val dateBStr = try {
-                        val d = LocalDate.parse(swapTargetWorkout!!.date)
-                        val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
-                        "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
-                    } catch (e: Exception) { swapTargetWorkout!!.date }
-
-                    Text(
-                        text = "Bạn muốn tráo đổi bài tập giữa ngày $dateAStr và $dateBStr cho chỉ tuần này hay áp dụng cho toàn bộ các tuần tiếp theo?",
-                        fontSize = 14.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                    )
-
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Button(
-                            onClick = {
-                                showSwapConfirmation = false
-                                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = false)
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f),
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                            )
-                        ) {
-                            Text("Chỉ tuần này", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                        Button(
-                            onClick = {
-                                showSwapConfirmation = false
-                                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = true)
-                            },
-                            shape = RoundedCornerShape(12.dp),
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            Text("Tất cả tuần sau", fontSize = 12.sp, fontWeight = FontWeight.Bold)
-                        }
-                    }
-
-                    OutlinedButton(
-                        onClick = { showSwapConfirmation = false },
-                        shape = RoundedCornerShape(12.dp),
-                        modifier = Modifier.fillMaxWidth(),
-                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
-                    ) {
-                        Text("Hủy", fontWeight = FontWeight.Bold)
-                    }
-                }
+        CustomSwapConfirmationDialog(
+            sourceWorkout = swapSourceWorkout!!,
+            targetWorkout = swapTargetWorkout!!,
+            onConfirmAllWeeks = {
+                showSwapConfirmation = false
+                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = true)
+            },
+            onConfirmThisWeekOnly = {
+                showSwapConfirmation = false
+                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = false)
+            },
+            onDismiss = {
+                showSwapConfirmation = false
             }
-        }
+        )
     }
 
     // Regenerate confirmation dialog
@@ -971,6 +903,15 @@ fun AddEditWorkoutDialog(
     val workoutTypes = listOf("EASY", "LONG", "TEMPO", "INTERVAL", "REPETITION", "RECOVERY", "REST")
     var expandedDropdown by remember { mutableStateOf(false) }
 
+    val typeIcon = when (selectedType) {
+        "LONG", "EASY" -> Icons.Default.DirectionsRun
+        "TEMPO", "INTERVAL" -> Icons.Default.Speed
+        "REPETITION" -> Icons.Default.TrendingUp
+        "RECOVERY" -> Icons.Default.SelfImprovement
+        "REST" -> Icons.Default.Bedtime
+        else -> Icons.Default.FitnessCenter
+    }
+
     Dialog(
         onDismissRequest = onDismiss,
         properties = DialogProperties(usePlatformDefaultWidth = false)
@@ -1018,7 +959,7 @@ fun AddEditWorkoutDialog(
                         value = selectedDate,
                         onValueChange = {},
                         label = { Text("Ngày") },
-                        leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
+                        leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                         readOnly = true,
                         enabled = false,
                         shape = RoundedCornerShape(20.dp),
@@ -1042,6 +983,7 @@ fun AddEditWorkoutDialog(
                             onValueChange = {},
                             readOnly = true,
                             label = { Text("Loại bài tập") },
+                            leadingIcon = { Icon(typeIcon, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
                             shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.menuAnchor().fillMaxWidth()
@@ -1056,18 +998,62 @@ fun AddEditWorkoutDialog(
                                     onClick = {
                                         selectedType = type
                                         expandedDropdown = false
-                                        // Autofill standard labels
-                                        if (description.isBlank() || description.startsWith("Chạy") || description.startsWith("Nghỉ")) {
-                                            description = when (type) {
-                                                "REST" -> "Nghỉ ngơi hồi phục"
-                                                "LONG" -> "Chạy Long Run"
-                                                "EASY" -> "Chạy Easy"
-                                                "TEMPO" -> "Chạy Tempo"
-                                                "INTERVAL" -> "Chạy Interval"
-                                                "RECOVERY" -> "Chạy Phục Hồi"
-                                                "REPETITION" -> "Chạy Repetition"
-                                                else -> "Bài tập chạy"
+                                        
+                                        // Autofill standard values
+                                        description = when (type) {
+                                            "REST" -> "Nghỉ ngơi hồi phục"
+                                            "LONG" -> "Chạy Long Run"
+                                            "EASY" -> "Chạy Easy"
+                                            "TEMPO" -> "Chạy Tempo"
+                                            "INTERVAL" -> "Chạy Interval"
+                                            "RECOVERY" -> "Chạy Phục Hồi"
+                                            "REPETITION" -> "Chạy Repetition"
+                                            else -> "Bài tập chạy"
+                                        }
+
+                                        if (type == "REST") {
+                                            distanceText = "0.0"
+                                            paceMinText = "0"
+                                            paceSecText = "00"
+                                        } else {
+                                            distanceText = when (type) {
+                                                "LONG" -> "10.0"
+                                                "EASY" -> "5.0"
+                                                "TEMPO" -> "6.0"
+                                                "INTERVAL" -> "4.0"
+                                                "REPETITION" -> "3.0"
+                                                "RECOVERY" -> "4.0"
+                                                else -> "5.0"
                                             }
+                                            paceMinText = when (type) {
+                                                "LONG" -> "6"
+                                                "EASY" -> "6"
+                                                "TEMPO" -> "5"
+                                                "INTERVAL" -> "4"
+                                                "REPETITION" -> "4"
+                                                "RECOVERY" -> "7"
+                                                else -> "6"
+                                            }
+                                            paceSecText = when (type) {
+                                                "LONG" -> "45"
+                                                "EASY" -> "30"
+                                                "TEMPO" -> "30"
+                                                "INTERVAL" -> "45"
+                                                "REPETITION" -> "15"
+                                                "RECOVERY" -> "15"
+                                                else -> "30"
+                                            }
+                                        }
+
+                                        instructions = when (type) {
+                                            "REST" -> "Nghỉ ngơi hoàn toàn hoặc vận động nhẹ nhàng (yoga, giãn cơ nhẹ). Hãy để cơ thể có thời gian hồi phục tốt nhất."
+                                            "LONG" -> "Chạy cự ly dài chậm để rèn luyện sức bền hiếu khí. Giữ nhịp độ ổn định suốt quãng đường."
+                                            "EASY" -> "Chạy nhẹ nhàng thoải mái ở vùng nhịp tim thấp (Zone 2). Có thể trò chuyện cả câu trong lúc chạy."
+                                            "TEMPO" -> "Chạy tốc độ cao ổn định ở ngưỡng lactate (Zone 3-4). Cảm giác mệt nhưng vẫn kiểm soát tốt."
+                                            "INTERVAL" -> "Chạy biến tốc tốc độ cao. Chạy xen kẽ 4-5 lần các đoạn 800m hoặc 1000m nhanh, nghỉ đi bộ thả lỏng 2-3 phút ở giữa."
+                                            "REPETITION" -> "Chạy lặp lại cự ly ngắn tốc độ tối đa. Chạy 6-8 lần đoạn 200m-400m nhanh, nghỉ hồi phục hoàn toàn (đi bộ 3 phút) giữa các lần."
+                                            "RECOVERY" -> "Chạy hồi phục cực kỳ nhẹ nhàng sau các ngày tập nặng. Kích thích lưu thông máu để cơ bắp nhanh hồi phục."
+                                            else -> "Thực hiện bài chạy thoải mái."
                                         }
                                     }
                                 )
@@ -1081,6 +1067,7 @@ fun AddEditWorkoutDialog(
                     value = description,
                     onValueChange = { description = it },
                     label = { Text("Mô tả bài chạy") },
+                    leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     singleLine = true,
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1092,6 +1079,7 @@ fun AddEditWorkoutDialog(
                         value = distanceText,
                         onValueChange = { distanceText = it },
                         label = { Text("Cự ly mục tiêu (km)") },
+                        leadingIcon = { Icon(Icons.Default.TrendingUp, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
                         shape = RoundedCornerShape(20.dp),
@@ -1107,6 +1095,7 @@ fun AddEditWorkoutDialog(
                             value = paceMinText,
                             onValueChange = { paceMinText = it },
                             label = { Text("Pace (Phút)") },
+                            leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             shape = RoundedCornerShape(20.dp),
@@ -1116,6 +1105,7 @@ fun AddEditWorkoutDialog(
                             value = paceSecText,
                             onValueChange = { paceSecText = it },
                             label = { Text("Pace (Giây)") },
+                            leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
                             shape = RoundedCornerShape(20.dp),
@@ -1129,6 +1119,7 @@ fun AddEditWorkoutDialog(
                     value = instructions,
                     onValueChange = { instructions = it },
                     label = { Text("Hướng dẫn kỹ thuật") },
+                    leadingIcon = { Icon(Icons.Default.Assignment, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     maxLines = 3,
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
@@ -1139,6 +1130,7 @@ fun AddEditWorkoutDialog(
                     value = notes,
                     onValueChange = { notes = it },
                     label = { Text("Ghi chú cá nhân (nếu có)") },
+                    leadingIcon = { Icon(Icons.Default.Notes, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
                     maxLines = 2,
                     shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()

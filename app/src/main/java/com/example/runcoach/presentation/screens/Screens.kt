@@ -464,6 +464,18 @@ fun TestRunScreen(
     var showPaceGuide by remember { mutableStateOf(false) }
     var showHowToMeasure by remember { mutableStateOf(false) }
 
+    // Pulsating animation for the "Ôi chưa biết" button
+    val infiniteTransition = rememberInfiniteTransition(label = "pulse")
+    val pulseScale by infiniteTransition.animateFloat(
+        initialValue = 0.95f,
+        targetValue = 1.05f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "scale"
+    )
+
     val permissionsLauncher = rememberLauncherForActivityResult(
         contract = PermissionController.createRequestPermissionResultContract()
     ) { granted ->
@@ -542,10 +554,10 @@ fun TestRunScreen(
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 "Chạy 3km hết sức để đo lường khả năng tim mạch (VDOT). Kết quả này sẽ cá nhân hóa toàn bộ giáo án của bạn.",
-                fontSize = 14.sp,
+                fontSize = 16.sp,
                 color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
                 textAlign = TextAlign.Center,
-                lineHeight = 20.sp
+                lineHeight = 22.sp
             )
 
             Spacer(modifier = Modifier.height(24.dp))
@@ -557,7 +569,7 @@ fun TestRunScreen(
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Thời gian chạy 3km tốt nhất", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Text("Thời gian chạy 3km tốt nhất", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
                     Spacer(modifier = Modifier.height(16.dp))
 
                     Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -605,14 +617,14 @@ fun TestRunScreen(
                                 Column(modifier = Modifier.padding(12.dp)) {
                                     Text(
                                         "⚡ Thể lực VDOT ước lượng: ${"%.1f".format(vdotPreview)}",
-                                        fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                        fontSize = 15.sp, fontWeight = FontWeight.Bold,
                                         color = MaterialTheme.colorScheme.primary
                                     )
                                     Spacer(modifier = Modifier.height(4.dp))
                                     Text(
                                         text = "Easy: ${VdotCalculator.formatPace(pacesPreview.easyPaceSec)}   " +
                                             "Tempo: ${VdotCalculator.formatPace(pacesPreview.tempoPaceSec)}",
-                                        fontSize = 11.sp,
+                                        fontSize = 13.sp,
                                         color = MaterialTheme.colorScheme.onSurface.copy(0.7f)
                                     )
                                 }
@@ -628,19 +640,21 @@ fun TestRunScreen(
                     ) {
                         TextButton(
                             onClick = { showPaceGuide = !showPaceGuide },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier
+                                .weight(1f)
+                                .scale(pulseScale)
                         ) {
-                            Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.HelpOutline, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Ôi chưa biết", fontSize = 12.sp)
+                            Text("Ôi chưa biết", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                         TextButton(
                             onClick = { showHowToMeasure = !showHowToMeasure },
                             modifier = Modifier.weight(1f)
                         ) {
-                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(16.dp))
+                            Icon(Icons.Default.Info, contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(modifier = Modifier.width(4.dp))
-                            Text("Cách đo thời gian", fontSize = 12.sp)
+                            Text("Cách đo thời gian", fontSize = 14.sp, fontWeight = FontWeight.Bold)
                         }
                     }
 
@@ -654,7 +668,7 @@ fun TestRunScreen(
                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
                                     "📊 Bảng Tham Khảo Thời Gian Chạy 3km",
-                                    fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp, fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -670,21 +684,12 @@ fun TestRunScreen(
                                         modifier = Modifier.fillMaxWidth(),
                                         horizontalArrangement = Arrangement.SpaceBetween
                                     ) {
-                                        Text(group, fontSize = 12.sp, modifier = Modifier.weight(1.4f),
+                                        Text(group, fontSize = 14.sp, modifier = Modifier.weight(1.4f),
                                             color = MaterialTheme.colorScheme.onSurface)
-                                        Text(time, fontSize = 12.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.6f),
+                                        Text(time, fontSize = 14.sp, fontWeight = FontWeight.Bold, modifier = Modifier.weight(0.6f),
                                             textAlign = TextAlign.End, color = MaterialTheme.colorScheme.primary)
                                     }
                                 }
-                                Spacer(modifier = Modifier.height(8.dp))
-                                HorizontalDivider(color = MaterialTheme.colorScheme.onSurface.copy(0.1f))
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = "→ Chọn mức phù hợp với bạn rồi nhập thời gian tương ứng vào ô phút/giây phía trên!",
-                                    fontSize = 12.sp,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.Medium
-                                )
                             }
                         }
                     }
@@ -699,7 +704,7 @@ fun TestRunScreen(
                             Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                                 Text(
                                     "🏃 Cách Đo Thời Gian Chạy 3km",
-                                    fontSize = 14.sp, fontWeight = FontWeight.Bold,
+                                    fontSize = 16.sp, fontWeight = FontWeight.Bold,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Spacer(modifier = Modifier.height(4.dp))
@@ -712,10 +717,10 @@ fun TestRunScreen(
                                 )
                                 steps.forEachIndexed { i, step ->
                                     Row(verticalAlignment = Alignment.Top) {
-                                        Text("${i + 1}.", fontSize = 12.sp, fontWeight = FontWeight.Bold,
+                                        Text("${i + 1}.", fontSize = 14.sp, fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.primary,
                                             modifier = Modifier.padding(end = 6.dp, top = 1.dp))
-                                        Text(step, fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface, lineHeight = 17.sp)
+                                        Text(step, fontSize = 14.sp, color = MaterialTheme.colorScheme.onSurface, lineHeight = 20.sp)
                                     }
                                 }
                             }
@@ -770,7 +775,7 @@ fun TestRunScreen(
                                     Spacer(modifier = Modifier.width(8.dp))
                                     Text(
                                         "Health Connect không khả dụng trên thiết bị này. Vui lòng nhập thời gian thủ công.",
-                                        fontSize = 12.sp,
+                                        fontSize = 14.sp,
                                         color = ColorWarning
                                     )
                                 }
@@ -4109,88 +4114,240 @@ fun CustomSwapConfirmationDialog(
         } catch (e: Exception) { targetWorkout.date }
     }
 
-    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+    androidx.compose.ui.window.Dialog(
+        onDismissRequest = onDismiss,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false)
+    ) {
         Card(
             shape = RoundedCornerShape(24.dp),
             colors = CardDefaults.cardColors(
                 containerColor = MaterialTheme.colorScheme.surface
             ),
-            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f)),
             modifier = Modifier
-                .fillMaxWidth()
+                .fillMaxWidth(0.92f)
                 .padding(16.dp)
         ) {
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(24.dp),
+                    .padding(20.dp),
                 horizontalAlignment = Alignment.CenterHorizontally
             ) {
-                Box(
-                    modifier = Modifier
-                        .size(56.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
+                // Header with Swap Icon and Title
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Icon(
-                        imageVector = Icons.Default.SwapHoriz,
-                        contentDescription = "Swap icon",
-                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                        modifier = Modifier.size(32.dp)
+                    Box(
+                        modifier = Modifier
+                            .size(36.dp)
+                            .clip(RoundedCornerShape(8.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.SwapHoriz,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Text(
+                        text = "Tráo Đổi Lịch Tập",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 }
 
                 Spacer(modifier = Modifier.height(16.dp))
 
-                Text(
-                    text = "Đổi lịch tập luyện",
-                    fontSize = 18.sp,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                Text(
-                    text = "Bạn muốn tráo đổi bài tập giữa ngày $dateAStr và $dateBStr cho chỉ tuần này hay áp dụng cho các tuần tiếp theo?",
-                    fontSize = 14.sp,
-                    textAlign = TextAlign.Center,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-
-                Spacer(modifier = Modifier.height(24.dp))
-
-                Button(
-                    onClick = onConfirmAllWeeks,
+                // Visual representation of the swap
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    // Workout A
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        border = BorderStroke(1.dp, workoutTypeColor(sourceWorkout).copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = dateAStr,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = sourceWorkout.description,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (sourceWorkout.type != "REST") {
+                                Text(
+                                    text = "${String.format(java.util.Locale.US, "%.1f", sourceWorkout.targetDistanceKm)} km",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = "Nghỉ ngơi",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.CompareArrows,
+                        contentDescription = "swap",
+                        tint = MaterialTheme.colorScheme.secondary,
+                        modifier = Modifier.size(24.dp)
                     )
-                ) {
-                    Text("Áp dụng tất cả tuần sau", fontWeight = FontWeight.Bold)
+
+                    // Workout B
+                    Card(
+                        modifier = Modifier.weight(1f),
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)
+                        ),
+                        border = BorderStroke(1.dp, workoutTypeColor(targetWorkout).copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp)
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = dateBStr,
+                                fontSize = 11.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary,
+                                textAlign = TextAlign.Center
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = targetWorkout.description,
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                maxLines = 1,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            if (targetWorkout.type != "REST") {
+                                Text(
+                                    text = "${String.format(java.util.Locale.US, "%.1f", targetWorkout.targetDistanceKm)} km",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            } else {
+                                Text(
+                                    text = "Nghỉ ngơi",
+                                    fontSize = 11.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center
+                                )
+                            }
+                        }
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(16.dp))
 
-                OutlinedButton(
-                    onClick = onConfirmThisWeekOnly,
+                Text(
+                    text = "Bạn muốn tráo đổi bài tập giữa 2 ngày này cho chỉ tuần này hay áp dụng cho toàn bộ các tuần tiếp theo?",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f),
+                    textAlign = TextAlign.Start,
+                    modifier = Modifier.fillMaxWidth()
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Actions buttons side-by-side with reasonable spacing and icons
+                Row(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(12.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Text("Chỉ tráo đổi tuần này", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                    OutlinedButton(
+                        onClick = onConfirmThisWeekOnly,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(vertical = 10.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.8f))
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.DateRange,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Chỉ tuần này",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+
+                    Button(
+                        onClick = onConfirmAllWeeks,
+                        modifier = Modifier.weight(1f),
+                        shape = RoundedCornerShape(12.dp),
+                        contentPadding = PaddingValues(vertical = 10.dp)
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Repeat,
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = "Các tuần sau",
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
                 }
 
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(modifier = Modifier.height(6.dp))
 
                 TextButton(
                     onClick = onDismiss,
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier.fillMaxWidth(),
+                    colors = ButtonDefaults.textButtonColors(contentColor = MaterialTheme.colorScheme.error)
                 ) {
-                    Text("Hủy bỏ", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
+                    Icon(
+                        imageVector = Icons.Default.Close,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Hủy bỏ",
+                        fontSize = 13.sp,
+                        fontWeight = FontWeight.Bold
+                    )
                 }
             }
         }
