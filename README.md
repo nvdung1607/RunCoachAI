@@ -95,7 +95,18 @@ RunCoach AI là ứng dụng Android thông minh giúp thiết kế và quản l
 
 ## 📝 Thông Tin Phiên Bản
 
-*   **Phiên bản hiện tại:** v1.4
+*   **Phiên bản hiện tại:** v1.14.2
+    *   *Nâng cấp v1.14.2:*
+        *   **Bảo vệ Ngày Đua (Race Day Protection):** Khóa bài tập ngày đua (`RACE` Run) khỏi toàn bộ hoạt động kéo thả tráo đổi và dời lịch tập để tránh làm xáo trộn điểm mốc quan trọng nhất của toàn bộ giáo án.
+        *   **Giao diện Rest Day xám cool-grey cao cấp:** Tái thiết kế trực quan cho các ngày nghỉ phục hồi (`REST` day / không lịch tập) trên trang chủ Dashboard với khung viền màu xám nhạt tinh tế và biểu tượng thư giãn (`😌`) bắt mắt.
+        *   **Đồng bộ Widget thời gian thực:** Tích hợp bộ cập nhật widget tức thì (`updateWidget()`) vào tất cả các tác vụ chỉnh sửa, xóa, dời lịch, hoàn thành bài chạy hoặc thay đổi ngày đua, phản hồi ngay lập tức ngoài màn hình chính.
+        *   **StateFlow Eagerly ổn định:** Cấu hình các luồng dữ liệu chính trong ViewModel hoạt động ở chế độ `Eagerly` nhằm tránh hiện tượng rác dữ liệu hay trễ đồng bộ khi chuyển đổi qua lại giữa các màn hình ứng dụng.
+        *   **Compact Fitness Test UI:** Rút gọn tối ưu hóa chiều cao `WheelPicker` (từ 44.dp xuống 36.dp), thu nhỏ biểu tượng cúp chiến thắng và các khoảng trống thừa giúp nút sinh giáo án không bị đẩy lệch màn hình.
+        *   **Triệt tiêu hộp thoại kép (Double Popup):** Thay thế hộp thoại báo kết quả đồng bộ thứ hai bằng thông báo nổi `Toast` nhẹ nhàng và hiện đại.
+        *   **Widget Rest Day & Warm-Start Fix:** Widget tự động nhận diện ngày nghỉ để hiển thị thẻ REST DAY gọn gàng. Đồng thời sửa lỗi khởi động lại app khi bấm vào widget bằng cờ `Intent.CATEGORY_LAUNCHER` nguyên bản của hệ thống.
+        *   **Opaque Drag Previews:** Loại bỏ bóng đen xuyên thấu khi kéo thẻ bài tập, giúp giao diện kéo thả mượt mà và trực quan hơn.
+        *   **Check-then-Apply Sync Flow:** Khi đồng bộ thủ công, ứng dụng quét trước và hiển thị danh sách dời lịch trực quan dưới dạng `SyncConfirmationDialog` để người dùng xác nhận trước khi cập nhật.
+        *   **Workout Editing Form nâng cấp:** Hỗ trợ điền tự động (autofill) các thông số bài tập mẫu (quãng đường, pace mục tiêu, mô tả) tương ứng với từng kiểu chạy được chọn (EASY, TEMPO, INTERVAL,...).
     *   *Nâng cấp v1.4:*
         *   **Popup chi tiết bài tập:** Xem chi tiết đầy đủ thông tin về bài chạy (hướng dẫn, cự ly/pace mục tiêu, kết quả thực tế, ghi chú cá nhân) trực tiếp từ Lịch sử bằng popup Material 3.
         *   **Thuật toán giáo án nâng cao:** Sinh thêm nhiều loại bài tập phong phú (Recovery Run, Repetition Run), cá nhân hóa theo giới tính, độ tuổi và mức độ vận động (runner lớn tuổi được tính hệ số phục hồi cao hơn).
