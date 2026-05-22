@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="widget_bg_color">#F2FFFFFF</color> <!-- 95% White -->
-    <color name="widget_stroke_color">#33000000</color> <!-- Light grey border -->
-    <color name="widget_text_primary">#1C1C1E</color> <!-- Dark text for light background -->
-    <color name="widget_text_secondary">#8E8E93</color> <!-- Grey text -->
+    <color name="widget_bg_start">#FFFFFF</color> <!-- pure white -->
+    <color name="widget_bg_end">#E0F2FE</color> <!-- soft sky blue -->
+    <color name="widget_stroke_color">#00000000</color> <!-- transparent -->
+    <color name="widget_card_bg">#FFFFFF</color> <!-- pure white card -->
+    <color name="widget_card_stroke_color">#00000000</color> <!-- transparent -->
+    <color name="widget_text_primary">#0F172A</color>
+    <color name="widget_text_secondary">#475569</color> <!-- slate-600 -->
+    <color name="widget_accent_blue">#2563EB</color>
+    <color name="widget_accent_green">#059669</color> <!-- emerald-600 -->
+    <color name="widget_accent_indigo">#4F46E5</color> <!-- indigo-600 -->
+    <color name="widget_accent_amber">#D97706</color> <!-- amber-600 -->
+    <color name="widget_streak_bg_color">#FFFBEB</color> <!-- warm amber-50 -->
+    <color name="widget_streak_stroke_color">#0F172A</color>
 </resources>

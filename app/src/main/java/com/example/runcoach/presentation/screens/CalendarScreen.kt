@@ -1,6 +1,9 @@
 package com.example.runcoach.presentation.screens
 
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -48,6 +51,7 @@ fun CalendarScreen(
     var selectedDate by remember { mutableStateOf<LocalDate?>(null) }
     val selectedWorkout = selectedDate?.let { workoutsMap[it.toString()] }
     var showWorkoutDetails by remember { mutableStateOf<WorkoutEntity?>(null) }
+    var showLegendDialog by remember { mutableStateOf(false) }
 
     val isDark = isSystemInDarkTheme()
     val bgBrush = Brush.verticalGradient(
@@ -87,7 +91,7 @@ fun CalendarScreen(
                 textAlign = TextAlign.Center
             )
             // Legend button
-            IconButton(onClick = {}) {
+            IconButton(onClick = { showLegendDialog = true }) {
                 Icon(Icons.Default.Info, contentDescription = "Legend", tint = MaterialTheme.colorScheme.primary)
             }
         }
@@ -188,15 +192,14 @@ fun CalendarScreen(
                                 .background(
                                     when {
                                         isSelected -> MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)
-                                        isToday -> Color(0xFFF59E0B).copy(alpha = 0.15f) // Yellow background
+                                        isToday -> Color(0xFFF59E0B).copy(alpha = 0.08f) // Orange background for today
                                         !isValidDay -> Color.Transparent
                                         else -> MaterialTheme.colorScheme.surface.copy(alpha = 0.5f)
                                     }
                                 )
                                 .border(
-                                    width = if (isToday) 2.dp else if (isSelected) 1.5.dp else 0.dp,
-                                    color = if (isToday) Color(0xFFF59E0B) // Yellow border
-                                    else if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
+                                    width = if (isSelected) 1.5.dp else 0.dp,
+                                    color = if (isSelected) MaterialTheme.colorScheme.primary.copy(alpha = 0.6f)
                                     else Color.Transparent,
                                     shape = RoundedCornerShape(10.dp)
                                 )
@@ -214,8 +217,9 @@ fun CalendarScreen(
                                         text = "$dayNumber",
                                         fontSize = 12.sp,
                                         fontWeight = if (isToday) FontWeight.Bold else FontWeight.Normal,
-                                        color = if (isToday) MaterialTheme.colorScheme.primary
-                                        else MaterialTheme.colorScheme.onSurface
+                                        color = if (isToday) {
+                                            if (isDark) Color(0xFFFBBF24) else Color(0xFFD97706)
+                                        } else MaterialTheme.colorScheme.onSurface
                                     )
                                     if (workout != null) {
                                         Spacer(modifier = Modifier.height(2.dp))
@@ -256,6 +260,12 @@ fun CalendarScreen(
         WorkoutDetailsDialog(
             workout = showWorkoutDetails!!,
             onDismiss = { showWorkoutDetails = null }
+        )
+    }
+
+    if (showLegendDialog) {
+        CalendarLegendDialog(
+            onDismiss = { showLegendDialog = false }
         )
     }
 }
@@ -381,7 +391,7 @@ fun SelectedDayDetail(date: LocalDate, workout: WorkoutEntity, onClick: () -> Un
                 )
                 if (workout.targetDistanceKm > 0) {
                     Text(
-                        text = "${workout.targetDistanceKm} km - Pace: ${com.example.runcoach.domain.plan.VdotCalculator.formatPace(workout.targetPaceSec)}",
+                        text = "${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km - Pace: ${com.example.runcoach.domain.plan.VdotCalculator.formatPace(workout.targetPaceSec)}",
                         fontSize = 12.sp,
                         color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
                     )
@@ -439,3 +449,166 @@ fun workoutTypeShort(workout: WorkoutEntity): String {
         else -> workout.type.take(4).uppercase()
     }
 }
+
+@Composable
+fun CalendarLegendDialog(onDismiss: () -> Unit) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f)),
+            modifier = Modifier
+                .fillMaxWidth(0.92f)
+                .wrapContentHeight()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .verticalScroll(rememberScrollState()),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Header Icon
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Info,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(14.dp))
+
+                Text(
+                    text = "Thông Tin Lịch Tập",
+                    fontSize = 20.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(6.dp))
+
+                Text(
+                    text = "Giải thích các loại bài tập và màu sắc tương ứng trong lịch trình luyện tập của bạn.",
+                    fontSize = 13.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                    textAlign = TextAlign.Center
+                )
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f))
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                val legendItems = listOf(
+                    LegendItemData(
+                        title = "Chạy dài (Long Run)",
+                        color = ColorLong,
+                        icon = Icons.Default.DirectionsRun,
+                        desc = "Phát triển sức chịu đựng bền bỉ và tim mạch. Rất quan trọng cho cự ly dài."
+                    ),
+                    LegendItemData(
+                        title = "Chạy Easy (Easy Run)",
+                        color = ColorEasy,
+                        icon = Icons.Default.DirectionsRun,
+                        desc = "Chạy nhẹ nhàng thư giãn tích lũy thể tích tuần, củng cố cơ khớp mà ít gây mỏi cơ."
+                    ),
+                    LegendItemData(
+                        title = "Tốc độ (Tempo/Interval)",
+                        color = ColorTempo,
+                        icon = Icons.Default.Speed,
+                        desc = "Chạy cường độ cao giúp nâng cao ngưỡng lactate và gia tăng tốc độ tối đa."
+                    ),
+                    LegendItemData(
+                        title = "Phục hồi (Recovery/CT)",
+                        color = ColorRecovery,
+                        icon = Icons.Default.SelfImprovement,
+                        desc = "Chạy siêu chậm giúp lưu thông máu phục hồi, hoặc các bài tập bổ trợ nhóm cơ chéo."
+                    ),
+                    LegendItemData(
+                        title = "Ngày đua (Race Day)",
+                        color = ColorRace,
+                        icon = Icons.Default.EmojiEvents,
+                        desc = "Ngày tham gia giải chạy mục tiêu hoặc chạy kiểm tra thể lực định kỳ."
+                    ),
+                    LegendItemData(
+                        title = "Nghỉ ngơi (Rest Day)",
+                        color = ColorRest,
+                        icon = Icons.Default.Bedtime,
+                        desc = "Nghỉ ngơi hoàn toàn để phục hồi cơ bắp, tránh chấn thương và quá tải."
+                    )
+                )
+
+                Column(
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    legendItems.forEach { item ->
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(36.dp)
+                                    .clip(RoundedCornerShape(10.dp))
+                                    .background(item.color.copy(alpha = 0.18f)),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Icon(
+                                    imageVector = item.icon,
+                                    contentDescription = null,
+                                    tint = item.color,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.width(12.dp))
+
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = item.title,
+                                    fontSize = 14.sp,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = item.desc,
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = onDismiss,
+                    shape = RoundedCornerShape(14.dp),
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
+                    modifier = Modifier.fillMaxWidth().height(48.dp)
+                ) {
+                    Text("Đóng", fontSize = 15.sp, fontWeight = FontWeight.Bold, color = Color.White)
+                }
+            }
+        }
+    }
+}
+
+data class LegendItemData(
+    val title: String,
+    val color: Color,
+    val icon: ImageVector,
+    val desc: String
+)

@@ -34,6 +34,24 @@ object VdotCalculator {
     }
 
     /**
+     * Finds the 3km running time in seconds that corresponds to a given VDOT score.
+     */
+    fun get3kTimeFromVdot(vdot: Double): Double {
+        var low = 300.0 // 5 minutes
+        var high = 2400.0 // 40 minutes
+        for (i in 0..40) {
+            val mid = (low + high) / 2.0
+            val calculatedVdot = calculateVdotFor3k(mid)
+            if (calculatedVdot > vdot) {
+                low = mid
+            } else {
+                high = mid
+            }
+        }
+        return (low + high) / 2.0
+    }
+
+    /**
      * Solves Jack Daniels' quadratic equation to find the speed (m/min) at a given VO2 cost.
      * 0.000104 * v^2 + 0.182258 * v - (4.60 + vo2) = 0
      */
@@ -93,7 +111,7 @@ object VdotCalculator {
     fun formatPace(paceSeconds: Int): String {
         val minutes = paceSeconds / 60
         val seconds = paceSeconds % 60
-        return String.format("%d:%02d phút/km", minutes, seconds)
+        return String.format(java.util.Locale.US, "%d:%02d\u00A0phút/km", minutes, seconds)
     }
 
     /**

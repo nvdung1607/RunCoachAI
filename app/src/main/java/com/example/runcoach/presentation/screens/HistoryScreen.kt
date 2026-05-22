@@ -203,7 +203,7 @@ fun HistoryScreen(
                         Column(horizontalAlignment = Alignment.CenterHorizontally) {
                             Text("Thời gian chạy", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
                             Text(
-                                text = String.format("%d phút", totalDuration.toInt()),
+                                text = String.format(java.util.Locale.US, "%.1f phút", totalDuration),
                                 fontSize = 20.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.primary
@@ -262,7 +262,7 @@ fun HistoryScreen(
                         .fillMaxWidth()
                         .weight(1f),
                     contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
                     items(filteredWorkouts, key = { it.date }) { workout ->
                         HistoryWorkoutCard(
@@ -347,7 +347,7 @@ fun HistoryWorkoutCard(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp)
+                .padding(10.dp)
         ) {
             // Header Row
             Row(
@@ -374,7 +374,7 @@ fun HistoryWorkoutCard(
                     Column {
                         Text(
                             text = formattedDate,
-                            fontSize = 11.sp,
+                            fontSize = 12.sp,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                         )
                         Text(
@@ -405,26 +405,39 @@ fun HistoryWorkoutCard(
                 }
             }
 
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
 
             // Details / Targets
             if (workout.type != "REST") {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .background(
                             MaterialTheme.colorScheme.onSurface.copy(alpha = 0.02f),
                             RoundedCornerShape(12.dp)
                         )
-                        .padding(12.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                        .padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Column {
-                        Text("🎯 Mục tiêu giáo án", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(2.dp))
+                    // Line 1: Target
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🎯 Mục tiêu:",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                        )
                         if (workout.targetDistanceKm > 0) {
+                            val targetDurationMin = (workout.targetDistanceKm * workout.targetPaceSec) / 60.0
+                            val durationStr = if (targetDurationMin > 0) " - ${String.format(java.util.Locale.US, "%.1f", targetDurationMin)}'" else ""
+                            val minutes = workout.targetPaceSec / 60
+                            val seconds = workout.targetPaceSec % 60
+                            val targetPaceStr = String.format(java.util.Locale.US, "%d:%02d/km", minutes, seconds)
                             Text(
-                                text = "${workout.targetDistanceKm} km - Pace: ${VdotCalculator.formatPace(workout.targetPaceSec)}",
+                                text = "${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km$durationStr - $targetPaceStr",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onSurface
@@ -439,27 +452,29 @@ fun HistoryWorkoutCard(
                         }
                     }
 
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text("🏁 Kết quả thực tế", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
-                        Spacer(modifier = Modifier.height(2.dp))
+                    // Line 2: Actual
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            text = "🏁 Thực tế:",
+                            fontSize = 13.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.55f)
+                        )
                         if (workout.isCompleted) {
-                            val sourceLabel = when (workout.syncSource) {
-                                "HEALTH_CONNECT" -> "Health Connect"
-                                "MANUAL" -> "Thủ công"
-                                else -> "Đồng bộ"
-                            }
                             val actualPace = if (workout.actualDistanceKm > 0) ((workout.actualDurationMin * 60) / workout.actualDistanceKm).toInt() else 0
-                            val paceStr = if (actualPace > 0) " - Pace: ${com.example.runcoach.domain.plan.VdotCalculator.formatPace(actualPace)}" else ""
+                            val paceStr = if (actualPace > 0) {
+                                val minutes = actualPace / 60
+                                val seconds = actualPace % 60
+                                " - " + String.format(java.util.Locale.US, "%d:%02d/km", minutes, seconds)
+                            } else ""
                             Text(
-                                text = "${workout.actualDistanceKm} km - ${workout.actualDurationMin.toInt()} phút$paceStr",
+                                text = "${String.format(java.util.Locale.US, "%.1f", workout.actualDistanceKm)} km - ${String.format(java.util.Locale.US, "%.1f", workout.actualDurationMin)}'$paceStr",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = ColorCompleted
-                            )
-                            Text(
-                                text = "Nguồn: $sourceLabel",
-                                fontSize = 9.sp,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
                             )
                         } else if (workout.isSkipped) {
                             Text(
@@ -478,6 +493,36 @@ fun HistoryWorkoutCard(
                         }
                     }
                 }
+
+                // Show Sync Source if completed
+                if (workout.isCompleted) {
+                    val (sourceText, sourceIcon) = when (workout.syncSource) {
+                        "HEALTH_CONNECT" -> "Health Connect" to Icons.Default.Sync
+                        "MANUAL" -> "Thủ công" to Icons.Default.EditCalendar
+                        else -> "Đồng bộ" to Icons.Default.Sync
+                    }
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(top = 6.dp, end = 4.dp),
+                        horizontalArrangement = Arrangement.End,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            imageVector = sourceIcon,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text(
+                            text = sourceText,
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                }
             } else {
                 // Rest day custom text
                 Box(
@@ -487,7 +532,7 @@ fun HistoryWorkoutCard(
                             ColorRest.copy(alpha = 0.05f),
                             RoundedCornerShape(12.dp)
                         )
-                        .padding(12.dp)
+                        .padding(8.dp)
                 ) {
                     Text(
                         text = "😴 Hôm nay là ngày nghỉ ngơi phục hồi cơ thể.",
@@ -599,6 +644,7 @@ fun EditWorkoutStatsDialog(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             leadingIcon = { Icon(Icons.Default.DirectionsRun, contentDescription = null) },
                             singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(6.dp))
@@ -654,6 +700,7 @@ fun EditWorkoutStatsDialog(
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             leadingIcon = { Icon(Icons.Default.Timer, contentDescription = null) },
                             singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(6.dp))
@@ -900,7 +947,7 @@ fun WorkoutDetailDialog(
                                     Column(modifier = Modifier.weight(1f)) {
                                         Text("Cự ly", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
                                         Text(
-                                            text = "${workout.targetDistanceKm} km",
+                                            text = "${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km",
                                             fontSize = 16.sp,
                                             fontWeight = FontWeight.Bold,
                                             color = MaterialTheme.colorScheme.onSurface
@@ -912,8 +959,10 @@ fun WorkoutDetailDialog(
                                         Text("Pace mục tiêu", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
                                         Text(
                                             text = com.example.runcoach.domain.plan.VdotCalculator.formatPace(workout.targetPaceSec),
-                                            fontSize = 16.sp,
+                                            fontSize = 13.sp,
                                             fontWeight = FontWeight.Bold,
+                                            maxLines = 1,
+                                            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                             color = MaterialTheme.colorScheme.onSurface
                                         )
                                     }
@@ -978,7 +1027,7 @@ fun WorkoutDetailDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Cự ly", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
                                     Text(
-                                        "${workout.actualDistanceKm} km",
+                                        "${String.format(java.util.Locale.US, "%.1f", workout.actualDistanceKm)} km",
                                         fontSize = 16.sp, fontWeight = FontWeight.Bold,
                                         color = ColorCompleted
                                     )
@@ -986,7 +1035,7 @@ fun WorkoutDetailDialog(
                                 Column(modifier = Modifier.weight(1f)) {
                                     Text("Thời gian", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
                                     Text(
-                                        "${workout.actualDurationMin.toInt()} phút",
+                                        "${String.format(java.util.Locale.US, "%.1f", workout.actualDurationMin)} phút",
                                         fontSize = 16.sp, fontWeight = FontWeight.Bold,
                                         color = ColorCompleted
                                     )
@@ -998,7 +1047,9 @@ fun WorkoutDetailDialog(
                                             Text("Pace thực", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(0.5f))
                                             Text(
                                                 com.example.runcoach.domain.plan.VdotCalculator.formatPace(actualPace),
-                                                fontSize = 16.sp, fontWeight = FontWeight.Bold,
+                                                fontSize = 13.sp, fontWeight = FontWeight.Bold,
+                                                maxLines = 1,
+                                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                                 color = ColorCompleted
                                             )
                                         }

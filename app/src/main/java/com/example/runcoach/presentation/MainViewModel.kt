@@ -16,6 +16,7 @@ import com.example.runcoach.data.worker.SyncWorker
 import com.example.runcoach.domain.plan.FitnessLevel
 import com.example.runcoach.domain.plan.PlanGenerator
 import com.example.runcoach.domain.plan.VdotCalculator
+import android.net.Uri
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
@@ -51,6 +52,29 @@ class MainViewModel(
             started = SharingStarted.WhileSubscribed(5000),
             initialValue = null
         )
+
+    init {
+        viewModelScope.launch {
+            launch {
+                workouts.collect {
+                    updateWidget()
+                }
+            }
+            launch {
+                userPreferences.collect {
+                    updateWidget()
+                }
+            }
+        }
+    }
+
+    private fun updateWidget() {
+        val intent = android.content.Intent(getApplication<Application>(), com.example.runcoach.presentation.receiver.RaceCountdownWidget::class.java).apply {
+            action = "com.example.runcoach.ACTION_REFRESH_WIDGET"
+        }
+        getApplication<Application>().sendBroadcast(intent)
+        com.example.runcoach.utils.AppLogger.d("Sent explicit ACTION_REFRESH_WIDGET broadcast to update app widget.")
+    }
 
     fun saveOnboarding(raceDate: String, fitnessLevel: String, targetDistance: Int, maxSessions: Int, gender: String, age: Int, activityLevel: String) {
         com.example.runcoach.utils.AppLogger.d("User saved onboarding: raceDate=$raceDate, level=$fitnessLevel, target=${targetDistance}km, sessions=$maxSessions")
@@ -336,6 +360,195 @@ class MainViewModel(
         }
     }
 
+    fun importPlanFromCsv(
+        context: android.content.Context,
+        uri: Uri,
+        onSuccess: (String) -> Unit,
+        onError: (String) -> Unit
+    ) {
+        viewModelScope.launch {
+            try {
+                val contentResolver = context.contentResolver
+                val inputStream = contentResolver.openInputStream(uri)
+                if (inputStream == null) {
+                    onError("Không thể mở file CSV.")
+                    return@launch
+                }
+
+                val reader = java.io.BufferedReader(java.io.InputStreamReader(inputStream, "UTF-8"))
+                val lines = reader.use { it.readLines() }
+
+                if (lines.isEmpty()) {
+                    onError("File CSV trống.")
+                    return@launch
+                }
+
+                val expectedHeader = "Ngày,Tuần,Loại bài tập,Cự ly mục tiêu (km),Pace mục tiêu (phút/km),Mô tả,Hướng dẫn,Hoàn thành,Cự ly thực tế (km),Thời gian thực tế (phút),Ghi chú"
+                var header = lines.first().trim()
+                if (header.startsWith("\uFEFF")) {
+                    header = header.substring(1)
+                }
+
+                if (header != expectedHeader) {
+                    onError("Định dạng file CSV không đúng.\nTiêu đề cột thực tế: $header\nTiêu đề cột yêu cầu: $expectedHeader")
+                    return@launch
+                }
+
+                val workoutsToInsert = mutableListOf<WorkoutEntity>()
+                val validTypes = setOf("EASY", "LONG", "TEMPO", "RACE", "INTERVAL", "REPETITION", "RECOVERY", "REST", "CT")
+                val dateFormatter = java.time.format.DateTimeFormatter.ISO_LOCAL_DATE
+
+                for (i in 1 until lines.size) {
+                    val line = lines[i].trim()
+                    if (line.isEmpty()) continue
+
+                    val fields = parseCsvLine(line)
+                    if (fields.size < 11) {
+                        onError("Dòng ${i + 1} thiếu thông tin (yêu cầu 11 cột, hiện có ${fields.size} cột). Dòng: $line")
+                        return@launch
+                    }
+
+                    val dateStr = fields[0].trim()
+                    val weekStr = fields[1].trim()
+                    val typeStr = fields[2].trim().uppercase()
+                    val targetDistStr = fields[3].trim()
+                    val targetPaceStr = fields[4].trim()
+                    val descStr = fields[5].trim()
+                    val instructionsStr = fields[6].trim()
+                    val completedStr = fields[7].trim().uppercase()
+                    val actualDistStr = fields[8].trim()
+                    val actualDurStr = fields[9].trim()
+                    val notesStr = fields[10].trim()
+
+                    // Validate Date (YYYY-MM-DD)
+                    try {
+                        java.time.LocalDate.parse(dateStr, dateFormatter)
+                    } catch (e: Exception) {
+                        onError("Dòng ${i + 1}: Ngày '$dateStr' không hợp lệ (định dạng đúng: YYYY-MM-DD).")
+                        return@launch
+                    }
+
+                    // Validate Week Number
+                    val weekNum = weekStr.toIntOrNull()
+                    if (weekNum == null || weekNum <= 0) {
+                        onError("Dòng ${i + 1}: Số tuần '$weekStr' không hợp lệ (phải là số nguyên dương).")
+                        return@launch
+                    }
+
+                    // Validate Type
+                    if (typeStr !in validTypes) {
+                        onError("Dòng ${i + 1}: Loại bài tập '$typeStr' không hợp lệ. Chỉ chấp nhận các loại: ${validTypes.joinToString(", ")}")
+                        return@launch
+                    }
+
+                    // Validate Target Distance
+                    val targetDist = if (targetDistStr.isEmpty()) 0.0 else targetDistStr.toDoubleOrNull()
+                    if (targetDist == null || targetDist < 0) {
+                        onError("Dòng ${i + 1}: Cự ly mục tiêu '$targetDistStr' không hợp lệ (phải là số không âm).")
+                        return@launch
+                    }
+
+                    // Validate Target Pace (can be MM:SS or empty)
+                    var targetPaceSec = 0
+                    if (targetPaceStr.isNotEmpty() && targetPaceStr != "-") {
+                        val paceParts = targetPaceStr.split(":")
+                        if (paceParts.size == 2) {
+                            val m = paceParts[0].toIntOrNull()
+                            val s = paceParts[1].toIntOrNull()
+                            if (m != null && s != null && m >= 0 && s >= 0 && s < 60) {
+                                targetPaceSec = m * 60 + s
+                            } else {
+                                onError("Dòng ${i + 1}: Pace mục tiêu '$targetPaceStr' không hợp lệ (định dạng đúng: MM:SS).")
+                                return@launch
+                            }
+                        } else {
+                            onError("Dòng ${i + 1}: Pace mục tiêu '$targetPaceStr' không hợp lệ (định dạng đúng: MM:SS).")
+                            return@launch
+                        }
+                    }
+
+                    // Validate Completion
+                    val isCompleted = when (completedStr) {
+                        "CÓ", "YES", "TRUE", "1" -> true
+                        "KHÔNG", "NO", "FALSE", "0", "" -> false
+                        else -> {
+                            onError("Dòng ${i + 1}: Trạng thái hoàn thành '$completedStr' không hợp lệ (chấp nhận: 'Có' hoặc 'Không').")
+                            return@launch
+                        }
+                    }
+
+                    // Validate Actual Distance
+                    val actualDist = if (actualDistStr.isEmpty()) 0.0 else actualDistStr.toDoubleOrNull()
+                    if (actualDist == null || actualDist < 0) {
+                        onError("Dòng ${i + 1}: Cự ly thực tế '$actualDistStr' không hợp lệ (phải là số không âm).")
+                        return@launch
+                    }
+
+                    // Validate Actual Duration
+                    val actualDur = if (actualDurStr.isEmpty()) 0.0 else actualDurStr.toDoubleOrNull()
+                    if (actualDur == null || actualDur < 0) {
+                        onError("Dòng ${i + 1}: Thời gian thực tế '$actualDurStr' không hợp lệ (phải là số không âm).")
+                        return@launch
+                    }
+
+                    val workout = WorkoutEntity(
+                        date = dateStr,
+                        weekNumber = weekNum,
+                        type = typeStr,
+                        targetDistanceKm = targetDist,
+                        targetPaceSec = targetPaceSec,
+                        description = descStr,
+                        instructions = instructionsStr,
+                        isCompleted = isCompleted,
+                        actualDistanceKm = actualDist,
+                        actualDurationMin = actualDur,
+                        notes = notesStr,
+                        isCustom = true
+                    )
+                    workoutsToInsert.add(workout)
+                }
+
+                // Clear and insert
+                workoutDao.clearAllWorkouts()
+                workoutDao.insertAll(workoutsToInsert)
+
+                onSuccess("Nhập giáo án thành công! Đã thêm ${workoutsToInsert.size} bài tập.")
+
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("importPlanFromCsv failed", e)
+                onError("Lỗi khi đọc file CSV: ${e.localizedMessage ?: e.message}")
+            }
+        }
+    }
+
+    private fun parseCsvLine(line: String): List<String> {
+        val result = mutableListOf<String>()
+        var currentField = StringBuilder()
+        var inQuotes = false
+        var i = 0
+        while (i < line.length) {
+            val c = line[i]
+            if (c == '"') {
+                if (inQuotes && i + 1 < line.length && line[i + 1] == '"') {
+                    currentField.append('"')
+                    i += 2
+                    continue
+                }
+                inQuotes = !inQuotes
+                i++
+            } else if (c == ',' && !inQuotes) {
+                result.add(currentField.toString())
+                currentField = StringBuilder()
+                i++
+            } else {
+                currentField.append(c)
+                i++
+            }
+        }
+        result.add(currentField.toString())
+        return result
+    }
+
     fun resetApp(onComplete: () -> Unit = {}) {
         com.example.runcoach.utils.AppLogger.w("Resetting the application database and preferences!")
         viewModelScope.launch {
@@ -378,6 +591,149 @@ class MainViewModel(
     fun completePermissionSetup() {
         viewModelScope.launch {
             prefsRepository.savePermissionSetupCompleted()
+        }
+    }
+
+    fun swapWorkouts(
+        workoutA: WorkoutEntity,
+        workoutB: WorkoutEntity,
+        applyToSubsequentWeeks: Boolean,
+        onComplete: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val localDateA = LocalDate.parse(workoutA.date)
+            val localDateB = LocalDate.parse(workoutB.date)
+            val dayOfWeekA = localDateA.dayOfWeek
+            val dayOfWeekB = localDateB.dayOfWeek
+
+            if (!applyToSubsequentWeeks) {
+                val updatedA = workoutA.copy(
+                    date = workoutB.date,
+                    weekNumber = workoutB.weekNumber
+                )
+                val updatedB = workoutB.copy(
+                    date = workoutA.date,
+                    weekNumber = workoutA.weekNumber
+                )
+                workoutDao.insertAll(listOf(updatedA, updatedB))
+            } else {
+                val startWeek = minOf(workoutA.weekNumber, workoutB.weekNumber)
+                val allWorkouts = workoutDao.getWorkoutsFromWeekDirect(startWeek)
+                val workoutsByWeek = allWorkouts.groupBy { it.weekNumber }
+                val updatedList = mutableListOf<WorkoutEntity>()
+
+                for ((week, weekWorkouts) in workoutsByWeek) {
+                    val wA = weekWorkouts.find { LocalDate.parse(it.date).dayOfWeek == dayOfWeekA }
+                    val wB = weekWorkouts.find { LocalDate.parse(it.date).dayOfWeek == dayOfWeekB }
+
+                    if (wA != null && wB != null) {
+                        val updatedWA = wA.copy(
+                            type = wB.type,
+                            targetDistanceKm = wB.targetDistanceKm,
+                            targetPaceSec = wB.targetPaceSec,
+                            description = wB.description,
+                            instructions = wB.instructions,
+                            isCompleted = wB.isCompleted,
+                            isSkipped = wB.isSkipped,
+                            rescheduledFromDate = wB.rescheduledFromDate,
+                            actualDistanceKm = wB.actualDistanceKm,
+                            actualDurationMin = wB.actualDurationMin,
+                            completedDate = wB.completedDate,
+                            syncSource = wB.syncSource,
+                            notes = wB.notes,
+                            isCustom = wB.isCustom
+                        )
+                        val updatedWB = wB.copy(
+                            type = wA.type,
+                            targetDistanceKm = wA.targetDistanceKm,
+                            targetPaceSec = wA.targetPaceSec,
+                            description = wA.description,
+                            instructions = wA.instructions,
+                            isCompleted = wA.isCompleted,
+                            isSkipped = wA.isSkipped,
+                            rescheduledFromDate = wA.rescheduledFromDate,
+                            actualDistanceKm = wA.actualDistanceKm,
+                            actualDurationMin = wA.actualDurationMin,
+                            completedDate = wA.completedDate,
+                            syncSource = wA.syncSource,
+                            notes = wA.notes,
+                            isCustom = wA.isCustom
+                        )
+                        updatedList.add(updatedWA)
+                        updatedList.add(updatedWB)
+                    }
+                }
+                if (updatedList.isNotEmpty()) {
+                    workoutDao.insertAll(updatedList)
+                }
+            }
+            updateWidget()
+            onComplete()
+        }
+    }
+
+    fun regeneratePlan(
+        raceDate: String,
+        targetDistance: Int,
+        gender: String,
+        age: Int,
+        timeSeconds: Double,
+        onComplete: () -> Unit = {}
+    ) {
+        viewModelScope.launch {
+            val vdot = VdotCalculator.calculateVdotFor3k(timeSeconds)
+            val paceZones = VdotCalculator.calculatePaceZones(vdot)
+            val currentPrefs = userPreferences.value
+
+            prefsRepository.saveOnboardingPreferences(
+                raceDate = raceDate,
+                fitnessLevel = currentPrefs.fitnessLevel,
+                targetDistance = targetDistance,
+                maxSessions = currentPrefs.maxSessionsPerWeek,
+                gender = gender,
+                age = age,
+                activityLevel = currentPrefs.activityLevel
+            )
+
+            prefsRepository.saveFitnessProfile(
+                vdotScore = vdot.toFloat(),
+                easyPaceSec = paceZones.easyPaceSec,
+                tempoPaceSec = paceZones.tempoPaceSec,
+                longPaceSec = paceZones.longPaceSec
+            )
+
+            workoutDao.clearAllWorkouts()
+
+            val startDate = LocalDate.now()
+            val raceDateParsed = LocalDate.parse(raceDate)
+            val level = when (currentPrefs.fitnessLevel) {
+                "INTERMEDIATE" -> FitnessLevel.INTERMEDIATE
+                "ADVANCED" -> FitnessLevel.ADVANCED
+                else -> FitnessLevel.BEGINNER
+            }
+
+            val generatedList = PlanGenerator.generatePlan(
+                startDate = startDate,
+                raceDate = raceDateParsed,
+                vdotScore = vdot,
+                level = level,
+                targetDistance = targetDistance,
+                maxSessionsPerWeek = currentPrefs.maxSessionsPerWeek,
+                age = age,
+                gender = gender
+            )
+
+            workoutDao.insertAll(generatedList)
+
+            val notifPrefs = userPreferences.value
+            com.example.runcoach.presentation.receiver.WorkoutReminderReceiver.scheduleDailyAlarm(
+                getApplication(),
+                notifPrefs.notificationHour,
+                notifPrefs.notificationMinute
+            )
+
+            updateWidget()
+            onComplete()
         }
     }
 }

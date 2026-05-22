@@ -6,6 +6,7 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.view.View
 import android.widget.RemoteViews
 import com.example.runcoach.MainActivity
 import com.example.runcoach.R
@@ -55,9 +56,8 @@ class RaceCountdownWidget : AppWidgetProvider() {
 
     override fun onReceive(context: Context, intent: Intent) {
         super.onReceive(context, intent)
-        // Handle manual refresh
         if (intent.action == "com.example.runcoach.ACTION_REFRESH_WIDGET") {
-            com.example.runcoach.utils.AppLogger.d("RaceCountdownWidget: Manual refresh intent received")
+            com.example.runcoach.utils.AppLogger.d("RaceCountdownWidget: Auto/Manual refresh intent received")
             val appWidgetManager = AppWidgetManager.getInstance(context)
             val component = ComponentName(context, RaceCountdownWidget::class.java)
             val ids = appWidgetManager.getAppWidgetIds(component)
@@ -76,11 +76,14 @@ class RaceCountdownWidget : AppWidgetProvider() {
         val views = RemoteViews(context.packageName, R.layout.race_countdown_widget)
 
         if (raceDateStr.isEmpty()) {
-            views.setTextViewText(R.id.widget_days_count, "--")
-            views.setTextViewText(R.id.widget_days_label, "Chưa cài đặt giáo án")
-            views.setTextViewText(R.id.widget_target, "Nhấp để thiết lập")
+            views.setTextViewText(R.id.widget_days_count, "📅")
+            views.setTextViewText(R.id.widget_days_label, "Chưa thiết lập")
+            views.setTextViewText(R.id.widget_target, "Chạm để cài đặt")
+            
+            views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_none)
+            views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_text_secondary))
             views.setTextViewText(R.id.widget_workout_title, "Chưa có giáo án")
-            views.setTextViewText(R.id.widget_workout_desc, "Vào app để thiết lập mục tiêu và tạo giáo án.")
+            views.setTextViewText(R.id.widget_workout_desc, "Mở ứng dụng để tạo lịch tập")
         } else {
             try {
                 val today = LocalDate.now()
@@ -89,41 +92,64 @@ class RaceCountdownWidget : AppWidgetProvider() {
 
                 if (daysRemaining < 0) {
                     views.setTextViewText(R.id.widget_days_count, "🏁")
-                    views.setTextViewText(R.id.widget_days_label, "Đã đến ngày đua!")
-                    views.setTextViewText(R.id.widget_target, "Cự ly: ${targetDistance}km")
+                    views.setTextViewText(R.id.widget_days_label, "Đã đến ngày đua")
+                    views.setTextViewText(R.id.widget_target, "Cự ly: $targetDistance km")
                 } else {
                     views.setTextViewText(R.id.widget_days_count, daysRemaining.toString())
-                    views.setTextViewText(R.id.widget_days_label, "ngày còn lại")
-                    views.setTextViewText(R.id.widget_target, "Mục tiêu: ${targetDistance}km")
+                    views.setTextViewText(R.id.widget_days_label, "ngày còn lại")
+                    views.setTextViewText(R.id.widget_target, "Mục tiêu: $targetDistance km")
                 }
-                
-                // Update Today's Workout
+
+                // Update Today's Workout Card
                 if (todayWorkout != null) {
                     if (todayWorkout.type in listOf("REST", "CT")) {
-                        views.setTextViewText(R.id.widget_workout_title, "Ngày nghỉ (Rest)")
-                        views.setTextViewText(R.id.widget_workout_desc, "Hôm nay không có lịch chạy, hãy để cơ bắp phục hồi.")
+                        views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_rest)
+                        views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_accent_indigo))
+                        views.setTextViewText(R.id.widget_workout_title, "NGHỈ NGƠI")
+                        views.setTextViewText(R.id.widget_workout_desc, "Để cơ bắp phục hồi")
                     } else {
-                        views.setTextViewText(R.id.widget_workout_title, "🏃 ${todayWorkout.type} - ${todayWorkout.description}")
                         if (todayWorkout.isCompleted) {
-                            views.setTextViewText(R.id.widget_workout_desc, "✅ Đã hoàn thành: ${todayWorkout.actualDistanceKm}km")
+                            views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_check)
+                            views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_accent_green))
+                            views.setTextViewText(R.id.widget_workout_title, "HOÀN THÀNH")
+                            views.setTextViewText(
+                                R.id.widget_workout_desc, 
+                                "Đã chạy: ${String.format(java.util.Locale.US, "%.1f", todayWorkout.actualDistanceKm)} km"
+                            )
                         } else if (todayWorkout.isSkipped) {
-                            views.setTextViewText(R.id.widget_workout_desc, "⏩ Đã dời lịch tập")
+                            views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_skipped)
+                            views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_accent_indigo))
+                            views.setTextViewText(R.id.widget_workout_title, "ĐÃ DỜI LỊCH")
+                            views.setTextViewText(R.id.widget_workout_desc, "Chạy bù vào hôm sau")
                         } else {
-                            views.setTextViewText(R.id.widget_workout_desc, "Mục tiêu: ${todayWorkout.targetDistanceKm}km\n${todayWorkout.instructions}")
+                            views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_run)
+                            views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_accent_blue))
+                            views.setTextViewText(R.id.widget_workout_title, "${todayWorkout.type} RUN")
+                            
+                            val distStr = String.format(java.util.Locale.US, "%.1f", todayWorkout.targetDistanceKm)
+                            val paceStr = formatPace(todayWorkout.targetPaceSec)
+                            views.setTextViewText(R.id.widget_workout_desc, "$distStr km • Pace $paceStr")
                         }
                     }
                 } else {
-                    views.setTextViewText(R.id.widget_workout_title, "Chưa có bài tập")
-                    views.setTextViewText(R.id.widget_workout_desc, "Vui lòng làm mới hoặc vào app để kiểm tra.")
+                    views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_none)
+                    views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_text_secondary))
+                    views.setTextViewText(R.id.widget_workout_title, "KHÔNG CÓ LỊCH")
+                    views.setTextViewText(R.id.widget_workout_desc, "Nghỉ ngơi hoặc chạy tự do")
                 }
                 
             } catch (e: Exception) {
-                views.setTextViewText(R.id.widget_days_count, "Error")
-                views.setTextViewText(R.id.widget_days_label, "Sai định dạng ngày")
+                views.setTextViewText(R.id.widget_days_count, "⚠️")
+                views.setTextViewText(R.id.widget_days_label, "Lỗi định dạng")
+                
+                views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_none)
+                views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_accent_amber))
+                views.setTextViewText(R.id.widget_workout_title, "Có lỗi xảy ra")
+                views.setTextViewText(R.id.widget_workout_desc, "Vui lòng mở ứng dụng")
             }
         }
 
-        // PendingIntent to launch MainActivity when clicking the widget
+        // PendingIntent to launch MainActivity when clicking any part of the widget
         val mainIntent = Intent(context, MainActivity::class.java).apply {
             flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
         }
@@ -133,23 +159,18 @@ class RaceCountdownWidget : AppWidgetProvider() {
             mainIntent,
             PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
         )
-        views.setOnClickPendingIntent(R.id.widget_days_count, pendingIntent)
-        views.setOnClickPendingIntent(R.id.widget_days_label, pendingIntent)
-        views.setOnClickPendingIntent(R.id.widget_target, pendingIntent)
+        
+        // Bind click layout targets
+        views.setOnClickPendingIntent(R.id.widget_countdown_container, pendingIntent)
         views.setOnClickPendingIntent(R.id.widget_workout_container, pendingIntent)
 
-        // PendingIntent for refresh button
-        val refreshIntent = Intent(context, RaceCountdownWidget::class.java).apply {
-            action = "com.example.runcoach.ACTION_REFRESH_WIDGET"
-        }
-        val refreshPendingIntent = PendingIntent.getBroadcast(
-            context,
-            1,
-            refreshIntent,
-            PendingIntent.FLAG_UPDATE_CURRENT or PendingIntent.FLAG_IMMUTABLE
-        )
-        views.setOnClickPendingIntent(R.id.widget_refresh, refreshPendingIntent)
-
         appWidgetManager.updateAppWidget(appWidgetId, views)
+    }
+
+    private fun formatPace(paceSeconds: Int): String {
+        if (paceSeconds <= 0) return "--"
+        val mins = paceSeconds / 60
+        val secs = paceSeconds % 60
+        return String.format(java.util.Locale.US, "%d:%02d", mins, secs)
     }
 }

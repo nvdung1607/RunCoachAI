@@ -5,6 +5,8 @@ import android.app.TimePickerDialog
 import android.content.pm.PackageManager
 import android.os.Build
 import android.widget.Toast
+import android.content.Intent
+import android.net.Uri
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
@@ -36,6 +38,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -60,6 +63,16 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
 import java.time.temporal.ChronoUnit
+import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.layout.boundsInRoot
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.shadow
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.ui.graphics.toArgb
 
 // ─────────────────────────────────────────────
 // ONBOARDING SCREEN
@@ -161,9 +174,10 @@ fun OnboardingScreen(
                             leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
                             readOnly = true,
                             enabled = false,
+                            shape = RoundedCornerShape(20.dp),
                             colors = OutlinedTextFieldDefaults.colors(
                                 disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                                disabledBorderColor = MaterialTheme.colorScheme.outline,
+                                disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                                 disabledLeadingIconColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
                                 disabledPlaceholderColor = MaterialTheme.colorScheme.onSurfaceVariant
@@ -558,6 +572,7 @@ fun TestRunScreen(
                             onValueChange = { minText = it },
                             label = { Text("Phút") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         )
                         OutlinedTextField(
@@ -565,6 +580,7 @@ fun TestRunScreen(
                             onValueChange = { secText = it },
                             label = { Text("Giây") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -1273,8 +1289,10 @@ fun DashboardScreen(
                         if (workout.targetDistanceKm > 0) {
                             Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                "🎯 Mục tiêu: Cự ly ${workout.targetDistanceKm} km - Pace: ${VdotCalculator.formatPace(workout.targetPaceSec)}",
-                                fontSize = 14.sp,
+                                "🎯 Mục tiêu: Cự ly ${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km - Pace: ${VdotCalculator.formatPace(workout.targetPaceSec)}",
+                                fontSize = 13.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                         }
@@ -1285,7 +1303,7 @@ fun DashboardScreen(
                         if (workout.isCompleted) {
                             HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
                             Text(
-                                "✅ Thực tế: ${workout.actualDistanceKm}km trong ${workout.actualDurationMin.toInt()} phút (${workout.syncSource})",
+                                "✅ Thực tế: ${String.format(java.util.Locale.US, "%.1f", workout.actualDistanceKm)} km trong ${workout.actualDurationMin.toInt()} phút (${workout.syncSource})",
                                 fontSize = 13.sp,
                                 fontWeight = FontWeight.Bold,
                                 color = ColorCompleted
@@ -1434,8 +1452,10 @@ fun DashboardScreen(
                             )
                             Spacer(modifier = Modifier.width(8.dp))
                             Text(
-                                text = "Mục tiêu: Cự ly ${workout.targetDistanceKm} km - Pace: ${VdotCalculator.formatPace(workout.targetPaceSec)}",
-                                fontSize = 12.5.sp,
+                                text = "Mục tiêu: Cự ly ${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km - Pace: ${VdotCalculator.formatPace(workout.targetPaceSec)}",
+                                fontSize = 12.sp,
+                                maxLines = 1,
+                                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                                 fontWeight = FontWeight.Medium,
                                 color = MaterialTheme.colorScheme.primary
                             )
@@ -1459,7 +1479,7 @@ fun DashboardScreen(
                             },
                             placeholder = { Text("Ví dụ: ${workout.targetDistanceKm}") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(6.dp))
@@ -1527,7 +1547,7 @@ fun DashboardScreen(
                                 Text("Ví dụ: $estMin")
                             },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            shape = RoundedCornerShape(12.dp),
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.fillMaxWidth()
                         )
                         Spacer(modifier = Modifier.height(6.dp))
@@ -2229,14 +2249,44 @@ fun HealthConnectCard(
 
 @Composable
 fun WeeklyVolumeChart(workoutsList: List<WorkoutEntity>) {
+    var showAnalyticsDialog by remember { mutableStateOf(false) }
+
     Card(
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         shape = RoundedCornerShape(20.dp),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-        modifier = Modifier.fillMaxWidth()
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { showAnalyticsDialog = true }
     ) {
         Column(modifier = Modifier.padding(20.dp)) {
-            Text("Khối lượng tập luyện theo tuần", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    "Khối lượng tập luyện theo tuần",
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Xem chi tiết",
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Icon(
+                        Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.size(16.dp)
+                    )
+                }
+            }
             Spacer(modifier = Modifier.height(12.dp))
 
             val weeklyStats = remember(workoutsList) {
@@ -2316,6 +2366,715 @@ fun WeeklyVolumeChart(workoutsList: List<WorkoutEntity>) {
             }
         }
     }
+
+    if (showAnalyticsDialog) {
+        DetailedAnalyticsDialog(
+            workoutsList = workoutsList,
+            onDismiss = { showAnalyticsDialog = false }
+        )
+    }
+}
+
+// ─────────────────────────────────────────────
+// DETAILED ANALYTICS POPUP & CHARTS
+// ─────────────────────────────────────────────
+
+data class AnalyticsChartItem(
+    val label: String,
+    val target: Double,
+    val actual: Double,
+    val workouts: List<WorkoutEntity>
+)
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun DetailedAnalyticsDialog(
+    workoutsList: List<WorkoutEntity>,
+    onDismiss: () -> Unit
+) {
+    var selectedTab by remember { mutableIntStateOf(0) }
+    var selectedBarIndex by remember { mutableIntStateOf(-1) }
+    var showChartTip by remember { mutableStateOf(true) }
+
+    // Reset selected bar when tab changes
+    LaunchedEffect(selectedTab) {
+        selectedBarIndex = -1
+    }
+
+    // Group workouts based on tab selection
+    val chartItems = remember(workoutsList, selectedTab) {
+        when (selectedTab) {
+            0 -> { // Week tab
+                workoutsList.groupBy { it.weekNumber }
+                    .map { (week, list) ->
+                        val target = list.sumOf { it.targetDistanceKm }
+                        val actual = list.sumOf { it.actualDistanceKm }
+                        AnalyticsChartItem(
+                            label = "Tuần $week",
+                            target = target,
+                            actual = actual,
+                            workouts = list
+                        )
+                    }.sortedBy { 
+                        it.label.substringAfter("Tuần ").toIntOrNull() ?: 0 
+                    }
+            }
+            1 -> { // Month tab
+                workoutsList.groupBy { workout ->
+                    val date = try { LocalDate.parse(workout.date) } catch (e: Exception) { null }
+                    if (date != null) {
+                        "${date.year}-${String.format(java.util.Locale.US, "%02d", date.monthValue)}"
+                    } else {
+                        "Unknown"
+                    }
+                }.filterKeys { it != "Unknown" }
+                 .toList()
+                 .sortedBy { it.first }
+                 .map { (monthKey, list) ->
+                     val parts = monthKey.split("-")
+                     val year = parts[0].toInt()
+                     val month = parts[1].toInt()
+                     val label = "Th $month/${year % 100}"
+                     val target = list.sumOf { it.targetDistanceKm }
+                     val actual = list.sumOf { it.actualDistanceKm }
+                     AnalyticsChartItem(
+                         label = label,
+                         target = target,
+                         actual = actual,
+                         workouts = list
+                     )
+                 }
+            }
+            else -> { // Year tab
+                workoutsList.groupBy { workout ->
+                    val date = try { LocalDate.parse(workout.date) } catch (e: Exception) { null }
+                    date?.year?.toString() ?: "Unknown"
+                }.filterKeys { it != "Unknown" }
+                 .toList()
+                 .sortedBy { it.first }
+                 .map { (yearStr, list) ->
+                     val label = "Năm $yearStr"
+                     val target = list.sumOf { it.targetDistanceKm }
+                     val actual = list.sumOf { it.actualDistanceKm }
+                     AnalyticsChartItem(
+                         label = label,
+                         target = target,
+                         actual = actual,
+                         workouts = list
+                     )
+                 }
+            }
+        }
+    }
+
+    // Active workouts list for stats card (all workouts in tab or specific selected bar)
+    val activeWorkouts = remember(chartItems, selectedBarIndex) {
+        if (selectedBarIndex != -1 && selectedBarIndex < chartItems.size) {
+            chartItems[selectedBarIndex].workouts
+        } else {
+            chartItems.flatMap { it.workouts }
+        }
+    }
+
+    val targetSum = remember(activeWorkouts) { activeWorkouts.sumOf { it.targetDistanceKm } }
+    val actualSum = remember(activeWorkouts) { activeWorkouts.sumOf { it.actualDistanceKm } }
+    val ratio = remember(targetSum, actualSum) {
+        if (targetSum > 0.0) (actualSum / targetSum * 100.0) else 0.0
+    }
+    val completedCount = remember(activeWorkouts) { activeWorkouts.count { it.isCompleted } }
+    val totalCount = remember(activeWorkouts) { activeWorkouts.count { it.type != "REST" } }
+
+    val totalDurationMin = remember(activeWorkouts) { activeWorkouts.sumOf { it.actualDurationMin } }
+    val avgPace = remember(actualSum, totalDurationMin) {
+        calculateAveragePace(actualSum, totalDurationMin)
+    }
+
+    // Coach feedback specific evaluation (only including workouts up to today for overall view)
+    val todayStr = remember { LocalDate.now().toString() }
+    val feedbackWorkouts = remember(activeWorkouts, selectedBarIndex, todayStr) {
+        if (selectedBarIndex == -1) {
+            activeWorkouts.filter { it.date <= todayStr }
+        } else {
+            activeWorkouts
+        }
+    }
+
+    val feedbackTargetSum = remember(feedbackWorkouts) { feedbackWorkouts.sumOf { it.targetDistanceKm } }
+    val feedbackActualSum = remember(feedbackWorkouts) { feedbackWorkouts.sumOf { it.actualDistanceKm } }
+    val feedbackRatio = remember(feedbackTargetSum, feedbackActualSum) {
+        if (feedbackTargetSum > 0.0) (feedbackActualSum / feedbackTargetSum * 100.0) else 0.0
+    }
+    val feedbackCompletedCount = remember(feedbackWorkouts) { feedbackWorkouts.count { it.isCompleted } }
+    val feedbackTotalCount = remember(feedbackWorkouts) { feedbackWorkouts.count { it.type != "REST" } }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surface,
+            tonalElevation = 6.dp,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 12.dp, vertical = 24.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .verticalScroll(rememberScrollState())
+                    .padding(20.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(
+                            Icons.Default.BarChart,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = "Phân tích Luyện tập",
+                            fontSize = 18.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Default.Close, contentDescription = "Đóng")
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Tab Selector
+                PillTabRow(
+                    selectedTab = selectedTab,
+                    onTabSelected = { selectedTab = it },
+                    tabs = listOf("Tuần", "Tháng", "Năm")
+                )
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Interactive Indicator Banner
+                if (selectedBarIndex != -1 && selectedBarIndex < chartItems.size) {
+                    val selectedItem = chartItems[selectedBarIndex]
+                    val completionRate = if (selectedItem.target > 0.0) (selectedItem.actual / selectedItem.target * 100.0) else 0.0
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                Icons.Default.Info,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = "${selectedItem.label}: Thực tế ${String.format(java.util.Locale.US, "%.1f", selectedItem.actual)}km / Kế hoạch ${String.format(java.util.Locale.US, "%.1f", selectedItem.target)}km (${String.format(java.util.Locale.US, "%.1f", completionRate)}%)",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+                } else if (showChartTip) {
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.3f)),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(
+                                modifier = Modifier.weight(1f),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Text(
+                                    text = "💡 Chạm vào cột biểu đồ để xem chi tiết từng giai đoạn.",
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                )
+                            }
+                            IconButton(
+                                onClick = { showChartTip = false },
+                                modifier = Modifier.size(28.dp)
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Close,
+                                    contentDescription = "Tắt gợi ý",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                                    modifier = Modifier.size(16.dp)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                // Custom Canvas Chart
+                DetailedBarChart(
+                    items = chartItems,
+                    selectedIndex = selectedBarIndex,
+                    onBarSelected = { selectedBarIndex = it }
+                )
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                // Legend
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    horizontalArrangement = Arrangement.End,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f))
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Mục tiêu",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                    Spacer(modifier = Modifier.width(16.dp))
+                    Box(
+                        modifier = Modifier
+                            .size(10.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(MaterialTheme.colorScheme.primary)
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text(
+                        text = "Thực tế",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Detailed Metrics Title
+                Text(
+                    text = if (selectedBarIndex != -1) "Số liệu ${chartItems[selectedBarIndex].label}" else "Số liệu tổng quan giai đoạn",
+                    fontSize = 15.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(10.dp))
+
+                // Metrics Grid
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AnalyticsMetricCard(
+                            title = "TỔNG CỰ LY",
+                            value = "${String.format(java.util.Locale.US, "%.1f", actualSum)} km",
+                            subtitle = "Mục tiêu: ${String.format(java.util.Locale.US, "%.1f", targetSum)} km",
+                            icon = Icons.AutoMirrored.Filled.DirectionsRun,
+                            iconTint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AnalyticsMetricCard(
+                            title = "TỶ LỆ HOÀN THÀNH",
+                            value = "${String.format(java.util.Locale.US, "%.1f", ratio)}%",
+                            subtitle = when {
+                                ratio >= 90.0 -> "Xuất sắc! 🔥"
+                                ratio >= 70.0 -> "Khá tốt! 👍"
+                                ratio > 0.0 -> "Cần cố gắng 🏃‍♂️"
+                                else -> "Chưa chạy bài nào 💤"
+                            },
+                            icon = Icons.Default.CheckCircle,
+                            iconTint = if (ratio >= 90.0) ColorCompleted else if (ratio >= 70.0) ColorCompleted.copy(alpha = 0.7f) else ColorWarning,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        AnalyticsMetricCard(
+                            title = "SỐ BUỔI CHẠY",
+                            value = "$completedCount buổi",
+                            subtitle = "Kế hoạch: $totalCount buổi",
+                            icon = Icons.Default.DateRange,
+                            iconTint = MaterialTheme.colorScheme.secondary,
+                            modifier = Modifier.weight(1f)
+                        )
+                        AnalyticsMetricCard(
+                            title = "PACE TRUNG BÌNH",
+                            value = "$avgPace /km",
+                            subtitle = "Tốc độ trung bình thực tế",
+                            icon = Icons.Default.Timer,
+                            iconTint = ColorEasy,
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                // Motivational AI Insight
+                val comment = when {
+                    feedbackTotalCount > 0 && feedbackCompletedCount == feedbackTotalCount -> {
+                        "Xuất sắc! Bạn đã hoàn thành đầy đủ tất cả các buổi tập theo kế hoạch của giai đoạn này. Hãy tiếp tục phong độ tuyệt vời này nhé! 🔥"
+                    }
+                    feedbackRatio >= 95.0 -> {
+                        "Phong độ đỉnh cao! Bạn đang bám sát giáo án và hoàn thành cực kỳ xuất sắc mục tiêu đề ra. Hãy tiếp tục duy trì nhé!"
+                    }
+                    feedbackRatio >= 80.0 -> {
+                        "Tuyệt vời! Kết quả luyện tập của bạn rất tích cực. Bạn đang đi đúng hướng để sẵn sàng cho ngày đua."
+                    }
+                    feedbackRatio >= 50.0 -> {
+                        "Khá tốt, tuy nhiên bạn cần chú ý tập luyện đều đặn hơn để đảm bảo không bị quá tải ở các tuần tiếp theo."
+                    }
+                    feedbackRatio > 0.0 -> {
+                        "Lượng luyện tập thực tế đang hơi thấp so với mục tiêu. Hãy thu xếp thời gian hoàn thành các bài chạy Easy nhẹ nhàng nhé."
+                    }
+                    else -> {
+                        "Chưa bắt đầu tập luyện. Hãy xỏ giày vào chạy nhẹ nhàng bài Easy đầu tiên để tạo thói quen tốt ngay hôm nay!"
+                    }
+                }
+
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.06f)),
+                    shape = RoundedCornerShape(16.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.12f)),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier.padding(16.dp),
+                        verticalAlignment = Alignment.Top
+                    ) {
+                        Text(
+                            text = "💡",
+                            fontSize = 18.sp,
+                            modifier = Modifier.padding(end = 8.dp)
+                        )
+                        Column {
+                            Text(
+                                text = "Nhận xét huấn luyện viên",
+                                fontSize = 13.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Text(
+                                text = comment,
+                                fontSize = 12.sp,
+                                lineHeight = 17.sp,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PillTabRow(
+    selectedTab: Int,
+    onTabSelected: (Int) -> Unit,
+    tabs: List<String>
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(50))
+            .background(MaterialTheme.colorScheme.onSurface.copy(alpha = 0.05f))
+            .padding(4.dp),
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        tabs.forEachIndexed { index, title ->
+            val isSelected = selectedTab == index
+            val bgColor by animateColorAsState(
+                targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
+                label = "tabBg"
+            )
+            val textColor by animateColorAsState(
+                targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                label = "tabText"
+            )
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .clip(RoundedCornerShape(50))
+                    .background(bgColor)
+                    .clickable { onTabSelected(index) }
+                    .padding(vertical = 8.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 13.sp,
+                    fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Medium,
+                    color = textColor
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun DetailedBarChart(
+    items: List<AnalyticsChartItem>,
+    selectedIndex: Int,
+    onBarSelected: (Int) -> Unit
+) {
+    if (items.isEmpty()) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(200.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text("Không có dữ liệu tập luyện", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f))
+        }
+        return
+    }
+
+    val maxVal = items.maxOfOrNull { maxOf(it.target, it.actual) }?.coerceAtLeast(10.0) ?: 10.0
+    val roundedMax = when {
+        maxVal <= 10.0 -> 10.0
+        maxVal <= 25.0 -> 25.0
+        maxVal <= 50.0 -> 50.0
+        maxVal <= 100.0 -> 100.0
+        else -> ((maxVal / 50.0).toInt() + 1) * 50.0
+    }
+
+    val primaryColor = MaterialTheme.colorScheme.primary
+    val completedColor = ColorCompleted
+    val warningColor = ColorWarning
+    val gridColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(220.dp)
+            .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.1f), RoundedCornerShape(16.dp))
+            .padding(top = 16.dp, bottom = 12.dp, start = 8.dp, end = 16.dp)
+    ) {
+        Canvas(
+            modifier = Modifier
+                .fillMaxSize()
+                .pointerInput(items) {
+                    detectTapGestures { offset ->
+                        val startXPx = 48.dp.toPx()
+                        val availableWidth = size.width - startXPx
+                        if (offset.x >= startXPx && offset.x <= size.width) {
+                            val colWidth = availableWidth / items.size
+                            val clickedIdx = ((offset.x - startXPx) / colWidth).toInt().coerceIn(0, items.size - 1)
+                            onBarSelected(if (selectedIndex == clickedIdx) -1 else clickedIdx)
+                        } else {
+                            onBarSelected(-1)
+                        }
+                    }
+                }
+        ) {
+            val canvasW = size.width
+            val canvasH = size.height
+            val startX = 48.dp.toPx()
+            val chartW = canvasW - startX
+            val chartH = canvasH - 32.dp.toPx()
+
+            // 1. Draw Grid Lines and Y-Axis Labels
+            val textPaint = android.graphics.Paint().apply {
+                color = android.graphics.Color.GRAY
+                textSize = 24f
+                textAlign = android.graphics.Paint.Align.RIGHT
+            }
+
+            val gridSteps = 4
+            for (i in 0..gridSteps) {
+                val fraction = i.toFloat() / gridSteps
+                val y = chartH * (1f - fraction)
+                // Grid line
+                drawLine(
+                    color = gridColor,
+                    start = Offset(startX, y),
+                    end = Offset(canvasW, y),
+                    strokeWidth = 1f
+                )
+                // Y label
+                val valLabel = "${(roundedMax * fraction).toInt()}"
+                drawIntoCanvas { canvas ->
+                    textPaint.color = if (i == 0) android.graphics.Color.LTGRAY else android.graphics.Color.GRAY
+                    canvas.nativeCanvas.drawText(
+                        valLabel,
+                        startX - 12f,
+                        y + 8f,
+                        textPaint
+                    )
+                }
+            }
+
+            // Draw "(km)" label on Y axis top
+            drawIntoCanvas { canvas ->
+                val kmPaint = android.graphics.Paint().apply {
+                    color = android.graphics.Color.GRAY
+                    textSize = 20f
+                    textAlign = android.graphics.Paint.Align.RIGHT
+                }
+                canvas.nativeCanvas.drawText(
+                    "(km)",
+                    startX - 16f,
+                    -14f,
+                    kmPaint
+                )
+            }
+
+            // 2. Draw Bars
+            val colWidth = chartW / items.size
+            val barSpacing = colWidth * 0.15f
+            val availableBarWidth = colWidth - barSpacing
+            val barW = (availableBarWidth / 2f).coerceAtMost(16.dp.toPx())
+
+            items.forEachIndexed { idx, item ->
+                val colCenterX = startX + idx * colWidth + colWidth / 2f
+
+                // Draw column selection highlight background
+                if (selectedIndex == idx) {
+                    drawRoundRect(
+                        color = primaryColor.copy(alpha = 0.08f),
+                        topLeft = Offset(startX + idx * colWidth, 0f),
+                        size = Size(colWidth, chartH),
+                        cornerRadius = CornerRadius(8f, 8f)
+                    )
+                }
+
+                // A. Target Bar (Gray/Translucent primary outline)
+                val targetH = (item.target / roundedMax * chartH).toFloat().coerceAtLeast(2f)
+                val targetLeft = colCenterX - barW - 2f
+                drawRoundRect(
+                    color = primaryColor.copy(alpha = 0.15f),
+                    topLeft = Offset(targetLeft, chartH - targetH),
+                    size = Size(barW, targetH),
+                    cornerRadius = CornerRadius(6f, 6f)
+                )
+
+                // B. Actual Bar (Solid color based on completion)
+                if (item.actual > 0.0) {
+                    val actualH = (item.actual / roundedMax * chartH).toFloat().coerceAtLeast(2f)
+                    val actualLeft = colCenterX + 2f
+                    val actualColor = if (item.actual >= item.target && item.target > 0.0) completedColor else primaryColor
+
+                    drawRoundRect(
+                        color = actualColor,
+                        topLeft = Offset(actualLeft, chartH - actualH),
+                        size = Size(barW, actualH),
+                        cornerRadius = CornerRadius(6f, 6f)
+                    )
+                }
+
+                // C. X-Axis Labels
+                val displayLabel = if (item.label.startsWith("Tuần ")) {
+                    "T${item.label.substringAfter("Tuần ")}"
+                } else {
+                    item.label
+                }
+
+                val labelPaint = android.graphics.Paint().apply {
+                    color = if (selectedIndex == idx) primaryColor.toArgb() else android.graphics.Color.GRAY
+                    textSize = 22f
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    if (selectedIndex == idx) {
+                        isFakeBoldText = true
+                    }
+                }
+                drawIntoCanvas { canvas ->
+                    canvas.nativeCanvas.drawText(
+                        displayLabel,
+                        colCenterX,
+                        canvasH - 6f,
+                        labelPaint
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun AnalyticsMetricCard(
+    title: String,
+    value: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconTint: Color,
+    modifier: Modifier = Modifier
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.06f)),
+        shape = RoundedCornerShape(16.dp),
+        modifier = modifier
+    ) {
+        Column(modifier = Modifier.padding(14.dp)) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween,
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Text(
+                    text = title,
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                    fontWeight = FontWeight.Medium
+                )
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconTint,
+                    modifier = Modifier.size(16.dp)
+                )
+            }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = value,
+                fontSize = 18.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Spacer(modifier = Modifier.height(2.dp))
+            Text(
+                text = subtitle,
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
+        }
+    }
+}
+
+fun calculateAveragePace(totalDistance: Double, totalDurationMin: Double): String {
+    if (totalDistance <= 0.0 || totalDurationMin <= 0.0) return "--:--"
+    val totalSec = (totalDurationMin * 60.0) / totalDistance
+    val min = (totalSec / 60.0).toInt()
+    val sec = (totalSec % 60.0).toInt()
+    return String.format(java.util.Locale.US, "%d:%02d", min, sec)
 }
 
 @Composable
@@ -2472,122 +3231,231 @@ fun PlanScreen(
     var rescheduleTargetWorkout by remember { mutableStateOf<WorkoutEntity?>(null) }
     var showWorkoutDetails by remember { mutableStateOf<WorkoutEntity?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = {
-                    Column {
-                        Text("Lịch Trình Tập Luyện", fontWeight = FontWeight.Bold)
-                        Text("${workoutsList.count { it.isCompleted }} buổi đã hoàn thành", fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
-                    }
+    var showExportMenu by remember { mutableStateOf(false) }
+
+    // Drag and Drop Swap states
+    var showSwapConfirmation by remember { mutableStateOf(false) }
+    var swapSourceWorkout by remember { mutableStateOf<WorkoutEntity?>(null) }
+    var swapTargetWorkout by remember { mutableStateOf<WorkoutEntity?>(null) }
+
+    val dragAndDropState = remember(workoutsList) {
+        DragAndDropState(
+            onDrop = { source, target ->
+                swapSourceWorkout = source
+                swapTargetWorkout = target
+                showSwapConfirmation = true
+            }
+        )
+    }
+
+    val csvPickerLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.GetContent()
+    ) { uri: Uri? ->
+        if (uri != null) {
+            viewModel.importPlanFromCsv(
+                context = context,
+                uri = uri,
+                onSuccess = { msg ->
+                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
                 },
-                navigationIcon = {
-                    IconButton(onClick = onNavigateBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-                actions = {
-                    IconButton(onClick = onNavigateToCustomPlan) {
-                        Icon(
-                            imageVector = Icons.Default.Edit,
-                            contentDescription = "Thiết kế giáo án",
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                    }
-                },
-                colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = MaterialTheme.colorScheme.background,
-                    titleContentColor = MaterialTheme.colorScheme.onBackground
-                )
+                onError = { err ->
+                    val builder = android.app.AlertDialog.Builder(context)
+                    builder.setTitle("Lỗi Nhập File CSV")
+                    builder.setMessage(err)
+                    builder.setPositiveButton("Đồng ý", null)
+                    builder.show()
+                }
             )
-        },
-        containerColor = MaterialTheme.colorScheme.background,
-        contentWindowInsets = WindowInsets(0.dp)
-    ) { innerPadding ->
-        LazyColumn(
-            modifier = Modifier.fillMaxSize().padding(innerPadding),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            items(groupedWorkouts) { (week, dayWorkouts) ->
-                var isExpanded by remember { mutableStateOf(week == 1) }
+        }
+    }
 
-                val completedInWeek = dayWorkouts.count { it.isCompleted }
-                val runningWorkouts = dayWorkouts.filter { it.type !in listOf("REST", "CT") }
-                val weekProgress = if (runningWorkouts.isNotEmpty()) completedInWeek.toFloat() / runningWorkouts.size else 0f
-
-                Card(
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    shape = RoundedCornerShape(16.dp),
-                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Column(modifier = Modifier.padding(16.dp)) {
-                        // Week header
-                        Row(
-                            modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded },
-                            horizontalArrangement = Arrangement.SpaceBetween,
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Column(modifier = Modifier.weight(1f)) {
-                                Row(verticalAlignment = Alignment.CenterVertically) {
-                                    Text("Tuần $week", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                                    if (completedInWeek > 0) {
-                                        Spacer(modifier = Modifier.width(8.dp))
-                                        Box(
-                                            modifier = Modifier.clip(CircleShape).background(ColorCompleted.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)
-                                        ) {
-                                            Text("$completedInWeek/${runningWorkouts.size}", fontSize = 10.sp, color = ColorCompleted, fontWeight = FontWeight.Bold)
-                                        }
-                                    }
-                                }
-                                val totalDist = dayWorkouts.sumOf { it.targetDistanceKm }
-                                Text(
-                                    "Tổng: ${String.format("%.1f", totalDist)}km · ${getWeekDateRange(dayWorkouts)}",
-                                    fontSize = 11.sp,
-                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                                )
-                                if (weekProgress > 0) {
-                                    Spacer(modifier = Modifier.height(4.dp))
-                                    LinearProgressIndicator(
-                                        progress = { weekProgress },
-                                        modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
-                                        color = ColorCompleted,
-                                        trackColor = ColorCompleted.copy(alpha = 0.15f)
-                                    )
-                                }
-                            }
+    Box(modifier = Modifier.fillMaxSize()) {
+        Scaffold(
+            topBar = {
+                TopAppBar(
+                    title = {
+                        Column {
+                            Text("Lịch Trình Tập Luyện", fontWeight = FontWeight.Bold)
+                            Text("${workoutsList.count { it.isCompleted }} buổi đã hoàn thành", fontSize = 12.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                        }
+                    },
+                    navigationIcon = {
+                        IconButton(onClick = onNavigateBack) {
+                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        }
+                    },
+                    actions = {
+                        IconButton(onClick = onNavigateToCustomPlan) {
                             Icon(
-                                imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                imageVector = Icons.Default.Edit,
+                                contentDescription = "Thiết kế giáo án",
+                                tint = MaterialTheme.colorScheme.primary
                             )
                         }
-
-                        AnimatedVisibility(
-                            visible = isExpanded,
-                            enter = expandVertically() + fadeIn(),
-                            exit = shrinkVertically() + fadeOut()
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(top = 12.dp),
-                                verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                dayWorkouts.forEach { workout ->
-                                    WorkoutDayRow(
-                                        workout = workout,
-                                        onReschedule = {
-                                            rescheduleTargetWorkout = workout
-                                            showRescheduleDialog = true
-                                        },
-                                        onClick = {
-                                            showWorkoutDetails = workout
+                        IconButton(onClick = { showExportMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Share,
+                                contentDescription = "Chia sẻ",
+                                tint = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                        if (showExportMenu) {
+                            PlanShareDialog(
+                                onDismiss = { showExportMenu = false },
+                                onExportCsv = {
+                                    viewModel.exportPlanToCsv(context) { uri ->
+                                        if (uri != null) {
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "text/csv"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, "Chia sẻ CSV"))
+                                        } else {
+                                            Toast.makeText(context, "Lỗi khi xuất file CSV!", Toast.LENGTH_SHORT).show()
                                         }
+                                    }
+                                },
+                                onExportPdf = {
+                                    viewModel.exportPlanToPdf(context) { uri ->
+                                        if (uri != null) {
+                                            val intent = Intent(Intent.ACTION_SEND).apply {
+                                                type = "application/pdf"
+                                                putExtra(Intent.EXTRA_STREAM, uri)
+                                                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                                            }
+                                            context.startActivity(Intent.createChooser(intent, "Chia sẻ PDF"))
+                                        } else {
+                                            Toast.makeText(context, "Lỗi khi xuất file PDF!", Toast.LENGTH_SHORT).show()
+                                        }
+                                    }
+                                },
+                                onImportCsv = {
+                                    csvPickerLauncher.launch("*/*")
+                                }
+                            )
+                        }
+                    },
+                    colors = TopAppBarDefaults.topAppBarColors(
+                        containerColor = MaterialTheme.colorScheme.background,
+                        titleContentColor = MaterialTheme.colorScheme.onBackground
+                    )
+                )
+            },
+            containerColor = MaterialTheme.colorScheme.background,
+            contentWindowInsets = WindowInsets(0.dp)
+        ) { innerPadding ->
+            LazyColumn(
+                modifier = Modifier.fillMaxSize().padding(innerPadding),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                items(groupedWorkouts) { (week, dayWorkouts) ->
+                    var isExpanded by remember { mutableStateOf(week == 1) }
+
+                    val completedInWeek = dayWorkouts.count { it.isCompleted }
+                    val runningWorkouts = dayWorkouts.filter { it.type !in listOf("REST", "CT") }
+                    val weekProgress = if (runningWorkouts.isNotEmpty()) completedInWeek.toFloat() / runningWorkouts.size else 0f
+
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                        shape = RoundedCornerShape(16.dp),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp)) {
+                            Row(
+                                modifier = Modifier.fillMaxWidth().clickable { isExpanded = !isExpanded },
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Row(verticalAlignment = Alignment.CenterVertically) {
+                                        Text("Tuần $week", fontSize = 17.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                                        if (completedInWeek > 0) {
+                                            Spacer(modifier = Modifier.width(8.dp))
+                                            Box(
+                                                modifier = Modifier.clip(CircleShape).background(ColorCompleted.copy(alpha = 0.15f)).padding(horizontal = 6.dp, vertical = 2.dp)
+                                            ) {
+                                                Text("$completedInWeek/${runningWorkouts.size}", fontSize = 10.sp, color = ColorCompleted, fontWeight = FontWeight.Bold)
+                                            }
+                                        }
+                                    }
+                                    val totalDist = dayWorkouts.sumOf { it.targetDistanceKm }
+                                    Text(
+                                        "Tổng: ${String.format("%.1f", totalDist)}km · ${getWeekDateRange(dayWorkouts)}",
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                                     )
+                                    if (weekProgress > 0) {
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        LinearProgressIndicator(
+                                            progress = { weekProgress },
+                                            modifier = Modifier.fillMaxWidth().height(3.dp).clip(RoundedCornerShape(2.dp)),
+                                            color = ColorCompleted,
+                                            trackColor = ColorCompleted.copy(alpha = 0.15f)
+                                        )
+                                    }
+                                }
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f)
+                                )
+                            }
+
+                            AnimatedVisibility(
+                                visible = isExpanded,
+                                enter = expandVertically() + fadeIn(),
+                                exit = shrinkVertically() + fadeOut()
+                            ) {
+                                Column(
+                                    modifier = Modifier.padding(top = 12.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    dayWorkouts.forEach { workout ->
+                                        WorkoutDayRow(
+                                            workout = workout,
+                                            onReschedule = {
+                                                rescheduleTargetWorkout = workout
+                                                showRescheduleDialog = true
+                                            },
+                                            onClick = {
+                                                showWorkoutDetails = workout
+                                            },
+                                            dragAndDropState = dragAndDropState,
+                                            workoutsList = workoutsList
+                                        )
+                                    }
                                 }
                             }
                         }
                     }
+                }
+            }
+        }
+
+        if (dragAndDropState.isDragging && dragAndDropState.dragItem != null) {
+            val dragItem = dragAndDropState.dragItem!!
+            val offset = dragAndDropState.currentDragPosition - dragAndDropState.localTouchOffset
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.2f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
+                        .width(LocalConfiguration.current.screenWidthDp.dp - 32.dp)
+                        .shadow(16.dp, RoundedCornerShape(12.dp))
+                        .alpha(1.0f)
+                ) {
+                    WorkoutDayRow(
+                        workout = dragItem,
+                        onReschedule = {},
+                        onClick = {},
+                        isDragging = true
+                    )
                 }
             }
         }
@@ -2614,6 +3482,25 @@ fun PlanScreen(
         )
     }
 
+    // Swap confirmation dialog
+    if (showSwapConfirmation && swapSourceWorkout != null && swapTargetWorkout != null) {
+        CustomSwapConfirmationDialog(
+            sourceWorkout = swapSourceWorkout!!,
+            targetWorkout = swapTargetWorkout!!,
+            onConfirmAllWeeks = {
+                showSwapConfirmation = false
+                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = true)
+            },
+            onConfirmThisWeekOnly = {
+                showSwapConfirmation = false
+                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = false)
+            },
+            onDismiss = {
+                showSwapConfirmation = false
+            }
+        )
+    }
+
     // Workout details dialog
     if (showWorkoutDetails != null) {
         WorkoutDetailsDialog(
@@ -2624,22 +3511,41 @@ fun PlanScreen(
 }
 
 @Composable
-fun WorkoutDayRow(workout: WorkoutEntity, onReschedule: () -> Unit, onClick: () -> Unit) {
+fun WorkoutDayRow(
+    workout: WorkoutEntity,
+    onReschedule: () -> Unit,
+    onClick: () -> Unit,
+    dragAndDropState: DragAndDropState? = null,
+    workoutsList: List<WorkoutEntity> = emptyList(),
+    isDragging: Boolean = false
+) {
     val wColor = workoutTypeColor(workout)
     val icon = workoutTypeIcon(workout)
+    val isHovered = dragAndDropState?.hoverItem?.date == workout.date
+
+    val dragModifier = if (dragAndDropState != null) {
+        Modifier.workoutDragAndDropTarget(workout, dragAndDropState, workoutsList)
+    } else {
+        Modifier
+    }
 
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(dragModifier)
             .clip(RoundedCornerShape(12.dp))
             .background(
                 when {
-                    workout.isSkipped -> ColorSkipped.copy(alpha = 0.05f)
-                    workout.isCompleted -> ColorCompleted.copy(alpha = 0.05f)
-                    else -> MaterialTheme.colorScheme.background.copy(alpha = 0.6f)
+                    workout.isSkipped -> ColorSkipped.copy(alpha = if (isDragging) 0.15f else 0.05f)
+                    workout.isCompleted -> ColorCompleted.copy(alpha = if (isDragging) 0.15f else 0.05f)
+                    else -> if (isDragging) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.background.copy(alpha = 0.6f)
                 }
             )
-            .border(1.dp, wColor.copy(alpha = if (workout.isSkipped) 0.1f else 0.15f), RoundedCornerShape(12.dp))
+            .border(
+                if (isHovered) 2.dp else 1.dp,
+                if (isHovered) MaterialTheme.colorScheme.primary else wColor.copy(alpha = if (workout.isSkipped) 0.1f else if (isDragging) 0.6f else 0.15f),
+                RoundedCornerShape(12.dp)
+            )
             .clickable { onClick() }
             .padding(10.dp),
         verticalAlignment = Alignment.CenterVertically
@@ -2665,7 +3571,7 @@ fun WorkoutDayRow(workout: WorkoutEntity, onReschedule: () -> Unit, onClick: () 
             } catch (e: Exception) { workout.date }
 
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(dayLabel, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                Text(dayLabel, fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDragging) 0.8f else 0.5f))
                 if (workout.rescheduledFromDate != null) {
                     Spacer(modifier = Modifier.width(4.dp))
                     Box(modifier = Modifier.clip(RoundedCornerShape(4.dp)).background(ColorRecovery.copy(alpha = 0.15f)).padding(horizontal = 4.dp, vertical = 1.dp)) {
@@ -2688,13 +3594,13 @@ fun WorkoutDayRow(workout: WorkoutEntity, onReschedule: () -> Unit, onClick: () 
             }
             workout.isCompleted -> {
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${workout.actualDistanceKm}km", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ColorCompleted)
+                    Text("${String.format(java.util.Locale.US, "%.1f", workout.actualDistanceKm)} km", fontSize = 12.sp, fontWeight = FontWeight.Bold, color = ColorCompleted)
                     Icon(Icons.Default.CheckCircle, contentDescription = null, tint = ColorCompleted, modifier = Modifier.size(16.dp))
                 }
             }
             workout.targetDistanceKm > 0 -> {
                 Column(horizontalAlignment = Alignment.End) {
-                    Text("${workout.targetDistanceKm}km", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f))
+                    Text("${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDragging) 0.8f else 0.5f))
                     if (workout.type !in listOf("REST", "CT")) {
                         IconButton(onClick = onReschedule, modifier = Modifier.size(20.dp)) {
                             Icon(Icons.Default.SwapHoriz, contentDescription = "Dời lịch", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
@@ -2761,6 +3667,7 @@ fun RescheduleDialog(
                     label = { Text("Ngày mới") },
                     leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Text),
+                    shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -2943,7 +3850,7 @@ fun WorkoutDetailsDialog(
                     // Phase 2: Main workout
                     val mainWorkoutDesc = when (workout.type) {
                         "CT" -> "Bơi lội, đạp xe hoặc tập nhóm cơ trung tâm core/lưng trong 35 phút."
-                        else -> "Chạy quãng đường ${workout.targetDistanceKm} km ở pace ${VdotCalculator.formatPace(workout.targetPaceSec)}. Cố gắng giữ nhịp thở đều."
+                        else -> "Chạy quãng đường ${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km ở pace ${VdotCalculator.formatPace(workout.targetPaceSec)}. Cố gắng giữ nhịp thở đều."
                     }
                     WorkoutPhaseItem(
                         title = "2. Bài tập chính (Main Workout)",
@@ -3032,3 +3939,368 @@ fun WorkoutPhaseItem(
         }
     }
 }
+
+class DragAndDropState(
+    val onDrop: (WorkoutEntity, WorkoutEntity) -> Unit
+) {
+    var isDragging by mutableStateOf(false)
+    var dragItem by mutableStateOf<WorkoutEntity?>(null)
+    var hoverItem by mutableStateOf<WorkoutEntity?>(null)
+    var initialDragPosition by mutableStateOf(Offset.Zero)
+    var dragOffset by mutableStateOf(Offset.Zero)
+    var currentDragPosition by mutableStateOf(Offset.Zero)
+    var localTouchOffset by mutableStateOf(Offset.Zero)
+
+    val itemBounds = mutableMapOf<String, Rect>()
+
+    fun clear() {
+        isDragging = false
+        dragItem = null
+        hoverItem = null
+        initialDragPosition = Offset.Zero
+        dragOffset = Offset.Zero
+        currentDragPosition = Offset.Zero
+        localTouchOffset = Offset.Zero
+    }
+}
+
+@Composable
+fun Modifier.workoutDragAndDropTarget(
+    workout: WorkoutEntity,
+    state: DragAndDropState,
+    workoutsList: List<WorkoutEntity>
+): Modifier {
+    return this
+        .onGloballyPositioned { coords ->
+            state.itemBounds[workout.date] = coords.boundsInRoot()
+        }
+        .pointerInput(workout, workoutsList) {
+            detectDragGesturesAfterLongPress(
+                onDragStart = { offset ->
+                    val rect = state.itemBounds[workout.date]
+                    if (rect != null) {
+                        state.dragItem = workout
+                        state.isDragging = true
+                        state.initialDragPosition = Offset(rect.left + offset.x, rect.top + offset.y)
+                        state.currentDragPosition = state.initialDragPosition
+                        state.dragOffset = Offset.Zero
+                        state.localTouchOffset = offset
+                    }
+                },
+                onDrag = { change, dragAmount ->
+                    change.consume()
+                    state.dragOffset += dragAmount
+                    state.currentDragPosition = state.initialDragPosition + state.dragOffset
+
+                    var foundHover: WorkoutEntity? = null
+                    val currentPos = state.currentDragPosition
+                    for ((date, rect) in state.itemBounds) {
+                        if (rect.contains(currentPos)) {
+                            val item = workoutsList.find { it.date == date }
+                            if (item != null) {
+                                foundHover = item
+                                break
+                            }
+                        }
+                    }
+                    if (foundHover != null && foundHover.weekNumber == state.dragItem?.weekNumber && foundHover.date != state.dragItem?.date) {
+                        state.hoverItem = foundHover
+                    } else {
+                        state.hoverItem = null
+                    }
+                },
+                onDragEnd = {
+                    val drag = state.dragItem
+                    val hover = state.hoverItem
+                    if (drag != null && hover != null && drag.weekNumber == hover.weekNumber) {
+                        state.onDrop(drag, hover)
+                    }
+                    state.clear()
+                },
+                onDragCancel = {
+                    state.clear()
+                }
+            )
+        }
+}
+
+@Composable
+fun CustomSwapConfirmationDialog(
+    sourceWorkout: WorkoutEntity,
+    targetWorkout: WorkoutEntity,
+    onConfirmAllWeeks: () -> Unit,
+    onConfirmThisWeekOnly: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val dateAStr = remember(sourceWorkout.date) {
+        try {
+            val d = LocalDate.parse(sourceWorkout.date)
+            val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
+            "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
+        } catch (e: Exception) { sourceWorkout.date }
+    }
+
+    val dateBStr = remember(targetWorkout.date) {
+        try {
+            val d = LocalDate.parse(targetWorkout.date)
+            val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
+            "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
+        } catch (e: Exception) { targetWorkout.date }
+    }
+
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(56.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.SwapHoriz,
+                        contentDescription = "Swap icon",
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(32.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                Text(
+                    text = "Đổi lịch tập luyện",
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+
+                Spacer(modifier = Modifier.height(12.dp))
+
+                Text(
+                    text = "Bạn muốn tráo đổi bài tập giữa ngày $dateAStr và $dateBStr cho chỉ tuần này hay áp dụng cho các tuần tiếp theo?",
+                    fontSize = 14.sp,
+                    textAlign = TextAlign.Center,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                Button(
+                    onClick = onConfirmAllWeeks,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Text("Áp dụng tất cả tuần sau", fontWeight = FontWeight.Bold)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                OutlinedButton(
+                    onClick = onConfirmThisWeekOnly,
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary)
+                ) {
+                    Text("Chỉ tráo đổi tuần này", color = MaterialTheme.colorScheme.primary, fontWeight = FontWeight.SemiBold)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text("Hủy bỏ", color = MaterialTheme.colorScheme.error, fontWeight = FontWeight.Medium)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun PlanShareDialog(
+    onDismiss: () -> Unit,
+    onExportCsv: () -> Unit,
+    onExportPdf: () -> Unit,
+    onImportCsv: (() -> Unit)? = null
+) {
+    androidx.compose.ui.window.Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = MaterialTheme.colorScheme.surface
+            ),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp)
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(20.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.primaryContainer),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Share,
+                            contentDescription = null,
+                            tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Spacer(modifier = Modifier.width(12.dp))
+                    Text(
+                        text = "Chia sẻ & Sao lưu",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(20.dp))
+
+                ShareOptionRow(
+                    icon = Icons.Default.TableChart,
+                    iconColor = Color(0xFF2E7D32),
+                    title = "Xuất file CSV",
+                    description = "Lưu giáo án dạng bảng tính Excel, Zalo, Drive...",
+                    onClick = {
+                        onDismiss()
+                        onExportCsv()
+                    }
+                )
+
+                Spacer(modifier = Modifier.height(10.dp))
+
+                ShareOptionRow(
+                    icon = Icons.Default.Description,
+                    iconColor = Color(0xFFC62828),
+                    title = "Xuất file PDF",
+                    description = "In ấn hoặc xem giáo án dạng văn bản đẹp mắt",
+                    onClick = {
+                        onDismiss()
+                        onExportPdf()
+                    }
+                )
+
+                if (onImportCsv != null) {
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    ShareOptionRow(
+                        icon = Icons.Default.FileUpload,
+                        iconColor = MaterialTheme.colorScheme.primary,
+                        title = "Nhập từ file CSV",
+                        description = "Khôi phục giáo án chạy bộ từ file đã lưu",
+                        onClick = {
+                            onDismiss()
+                            onImportCsv()
+                        }
+                    )
+                }
+
+                Spacer(modifier = Modifier.height(16.dp))
+
+                TextButton(
+                    onClick = onDismiss,
+                    modifier = Modifier.align(Alignment.End)
+                ) {
+                    Text("Đóng", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ShareOptionRow(
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color,
+    title: String,
+    description: String,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        shape = RoundedCornerShape(16.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.2f),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)),
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(iconColor.copy(alpha = 0.1f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = icon,
+                    contentDescription = null,
+                    tint = iconColor,
+                    modifier = Modifier.size(22.dp)
+                )
+            }
+
+            Spacer(modifier = Modifier.width(12.dp))
+
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    fontSize = 14.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface
+                )
+                Spacer(modifier = Modifier.height(2.dp))
+                Text(
+                    text = description,
+                    fontSize = 11.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            Icon(
+                imageVector = Icons.Default.ChevronRight,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
+
+

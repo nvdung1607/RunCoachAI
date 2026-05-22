@@ -16,13 +16,17 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.window.Dialog
@@ -33,6 +37,7 @@ import com.example.runcoach.presentation.MainViewModel
 import com.example.runcoach.ui.theme.*
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
+import kotlin.math.roundToInt
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -42,14 +47,73 @@ fun CustomPlanScreen(
 ) {
     val context = LocalContext.current
     val workoutsList by viewModel.workouts.collectAsState()
+    val userPrefs by viewModel.userPreferences.collectAsState()
     
     // Dialog states
     var editingWorkout by remember { mutableStateOf<WorkoutEntity?>(null) }
     var showAddDialog by remember { mutableStateOf(false) }
     var showExportMenu by remember { mutableStateOf(false) }
+    var showRegenerateConfirm by remember { mutableStateOf(false) }
+
+    // Plan parameter local states
+    var isExpanded by remember { mutableStateOf(false) }
+    var raceDate by remember { mutableStateOf("") }
+    var targetDistance by remember { mutableStateOf(21) }
+    var gender by remember { mutableStateOf("MALE") }
+    var age by remember { mutableStateOf(25) }
+    var timeMinText by remember { mutableStateOf("") }
+    var timeSecText by remember { mutableStateOf("") }
+
+    LaunchedEffect(userPrefs) {
+        if (raceDate.isEmpty()) {
+            raceDate = userPrefs.raceDate
+            targetDistance = userPrefs.targetDistance
+            gender = userPrefs.gender
+            age = userPrefs.age
+            val totalSeconds = VdotCalculator.get3kTimeFromVdot(userPrefs.vdotScore.toDouble())
+            val min = (totalSeconds / 60).toInt()
+            val sec = (totalSeconds % 60).roundToInt()
+            timeMinText = min.toString()
+            timeSecText = sec.toString()
+        }
+    }
 
     val sortedWorkouts = remember(workoutsList) {
         workoutsList.sortedBy { it.date }
+    }
+
+    // Group workouts chronologically by Month and Week
+    val groupedWorkouts = remember(sortedWorkouts) {
+        val list = mutableListOf<Pair<String, List<Pair<Int, List<WorkoutEntity>>>>>()
+        val byMonth = sortedWorkouts.groupBy {
+            try {
+                val d = LocalDate.parse(it.date)
+                "Tháng ${d.monthValue}, ${d.year}"
+            } catch (e: Exception) {
+                "Không xác định"
+            }
+        }
+        byMonth.forEach { (monthStr, workoutsInMonth) ->
+            val byWeek = workoutsInMonth.groupBy { it.weekNumber }
+            val sortedWeeks = byWeek.toList().sortedBy { it.first }
+            list.add(Pair(monthStr, sortedWeeks))
+        }
+        list
+    }
+
+    // Drag and Drop Swap states
+    var showSwapConfirmation by remember { mutableStateOf(false) }
+    var swapSourceWorkout by remember { mutableStateOf<WorkoutEntity?>(null) }
+    var swapTargetWorkout by remember { mutableStateOf<WorkoutEntity?>(null) }
+
+    val dragAndDropState = remember(workoutsList) {
+        DragAndDropState(
+            onDrop = { source, target ->
+                swapSourceWorkout = source
+                swapTargetWorkout = target
+                showSwapConfirmation = true
+            }
+        )
     }
 
     val isDark = isSystemInDarkTheme()
@@ -138,63 +202,600 @@ fun CustomPlanScreen(
                 .background(bgBrush)
                 .padding(innerPadding)
         ) {
-            if (sortedWorkouts.isEmpty()) {
-                Box(
-                    modifier = Modifier.fillMaxSize(),
-                    contentAlignment = Alignment.Center
+            Column(modifier = Modifier.fillMaxSize()) {
+                // Collapsible Original Plan parameters card at the top
+                Card(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 8.dp),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.9f)
+                    ),
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.5f))
                 ) {
-                    Text(
-                        text = "Không có bài tập nào. Hãy tạo mới hoặc hoàn thành onboarding để tự sinh giáo án.",
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.padding(32.dp),
-                        color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                    Column(modifier = Modifier.padding(14.dp)) {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable { isExpanded = !isExpanded },
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.SpaceBetween
+                        ) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Icon(
+                                    imageVector = Icons.Default.Settings,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Thông số giáo án gốc",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 15.sp,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                if (!isExpanded) {
+                                    val distanceStr = when (targetDistance) {
+                                        5 -> "5K"
+                                        10 -> "10K"
+                                        21 -> "21K"
+                                        42 -> "42K"
+                                        else -> "${targetDistance}K"
+                                    }
+                                    val genderStr = when (gender) {
+                                        "MALE" -> "Nam"
+                                        "FEMALE" -> "Nữ"
+                                        else -> "Khác"
+                                    }
+                                    Text(
+                                        text = "$distanceStr · $genderStr · $age tuổi",
+                                        fontSize = 12.sp,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+                                        modifier = Modifier.padding(end = 4.dp)
+                                    )
+                                }
+                                Icon(
+                                    imageVector = if (isExpanded) Icons.Default.KeyboardArrowUp else Icons.Default.KeyboardArrowDown,
+                                    contentDescription = if (isExpanded) "Thu gọn" else "Mở rộng",
+                                    tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+                                )
+                            }
+                        }
+
+                        if (isExpanded) {
+                            Spacer(modifier = Modifier.height(12.dp))
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.3f))
+                            Spacer(modifier = Modifier.height(12.dp))
+
+                            // Race Date
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        val parsed = try { LocalDate.parse(raceDate) } catch(e: Exception) { LocalDate.now() }
+                                        DatePickerDialog(
+                                            context,
+                                            { _, y, m, d ->
+                                                raceDate = LocalDate.of(y, m + 1, d).toString()
+                                            },
+                                            parsed.year,
+                                            parsed.monthValue - 1,
+                                            parsed.dayOfMonth
+                                        ).show()
+                                    }
+                            ) {
+                                OutlinedTextField(
+                                    value = raceDate,
+                                    onValueChange = {},
+                                    label = { Text("Ngày chạy giải (Race Date)") },
+                                    leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
+                                    readOnly = true,
+                                    enabled = false,
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = OutlinedTextFieldDefaults.colors(
+                                        disabledTextColor = MaterialTheme.colorScheme.onSurface,
+                                        disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
+                                        disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
+                                    ),
+                                    modifier = Modifier.fillMaxWidth()
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Target distance
+                            Text(
+                                text = "Cự ly mục tiêu",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                val distances = listOf(5, 10, 21, 42)
+                                distances.forEach { dist ->
+                                    val selected = targetDistance == dist
+                                    val emoji = when (dist) {
+                                        5 -> "🏃"
+                                        10 -> "⚡"
+                                        21 -> "🏅"
+                                        42 -> "🏆"
+                                        else -> "👟"
+                                    }
+                                    val label = when (dist) {
+                                        5 -> "5K"
+                                        10 -> "10K"
+                                        21 -> "21K"
+                                        42 -> "42K"
+                                        else -> "${dist}K"
+                                    }
+                                    val subtext = when (dist) {
+                                        5 -> "Fun"
+                                        10 -> "Speed"
+                                        21 -> "Half"
+                                        42 -> "Full"
+                                        else -> "Run"
+                                    }
+                                    Box(
+                                        modifier = Modifier
+                                            .weight(1f)
+                                            .clip(RoundedCornerShape(16.dp))
+                                            .background(
+                                                if (selected) MaterialTheme.colorScheme.primary
+                                                else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                            )
+                                            .border(
+                                                1.dp,
+                                                if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                                RoundedCornerShape(16.dp)
+                                            )
+                                            .clickable { targetDistance = dist }
+                                            .padding(vertical = 10.dp),
+                                        contentAlignment = Alignment.Center
+                                    ) {
+                                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                            Text(text = emoji, fontSize = 20.sp)
+                                            Spacer(modifier = Modifier.height(2.dp))
+                                            Text(
+                                                text = label,
+                                                fontSize = 14.sp,
+                                                fontWeight = FontWeight.Bold,
+                                                color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface
+                                            )
+                                            Text(
+                                                text = subtext,
+                                                fontSize = 9.sp,
+                                                fontWeight = FontWeight.Medium,
+                                                color = if (selected) MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.8f) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Gender & Age
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Column(modifier = Modifier.weight(1.8f)) {
+                                    Text(
+                                        text = "Giới tính",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                                    )
+                                    Row(
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp),
+                                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        val genders = listOf("MALE", "FEMALE", "OTHER")
+                                        genders.forEach { g ->
+                                            val selected = gender == g
+                                            val icon = when (g) {
+                                                "MALE" -> Icons.Default.Male
+                                                "FEMALE" -> Icons.Default.Female
+                                                else -> Icons.Default.Transgender
+                                            }
+                                            val label = when (g) {
+                                                "MALE" -> "Nam"
+                                                "FEMALE" -> "Nữ"
+                                                else -> "Khác"
+                                            }
+                                            Box(
+                                                modifier = Modifier
+                                                    .weight(1f)
+                                                    .fillMaxHeight()
+                                                    .clip(RoundedCornerShape(20.dp))
+                                                    .background(
+                                                        if (selected) MaterialTheme.colorScheme.primary
+                                                        else MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f)
+                                                    )
+                                                    .border(
+                                                        1.dp,
+                                                        if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
+                                                        RoundedCornerShape(20.dp)
+                                                    )
+                                                    .clickable { gender = g },
+                                                contentAlignment = Alignment.Center
+                                            ) {
+                                                Column(
+                                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                                    verticalArrangement = Arrangement.Center
+                                                ) {
+                                                    Icon(
+                                                        imageVector = icon,
+                                                        contentDescription = label,
+                                                        tint = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+                                                        modifier = Modifier.size(20.dp)
+                                                    )
+                                                    Text(
+                                                        text = label,
+                                                        fontSize = 10.sp,
+                                                        fontWeight = FontWeight.Bold,
+                                                        color = if (selected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                                                    )
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+
+                                Column(modifier = Modifier.weight(1f)) {
+                                    Text(
+                                        text = "Tuổi",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                                    )
+                                    OutlinedTextField(
+                                        value = if (age > 0) age.toString() else "",
+                                        onValueChange = {
+                                            val clean = it.filter { c -> c.isDigit() }
+                                            age = clean.toIntOrNull() ?: 0
+                                        },
+                                        placeholder = { Text("Tuổi") },
+                                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(20.dp),
+                                        modifier = Modifier.fillMaxWidth().height(56.dp),
+                                        colors = OutlinedTextFieldDefaults.colors(
+                                            focusedBorderColor = MaterialTheme.colorScheme.primary,
+                                            unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+                                        )
+                                    )
+                                }
+                            }
+
+                            Spacer(modifier = Modifier.height(10.dp))
+
+                            // Best 3km running time
+                            Text(
+                                text = "Thời gian chạy 3km tốt nhất",
+                                fontSize = 12.sp,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                modifier = Modifier.padding(start = 4.dp)
+                            )
+                            Spacer(modifier = Modifier.height(4.dp))
+                            Row(
+                                modifier = Modifier.fillMaxWidth(),
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                OutlinedTextField(
+                                    value = timeMinText,
+                                    onValueChange = { timeMinText = it.filter { c -> c.isDigit() } },
+                                    label = { Text("Phút") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.weight(1f)
+                                )
+                                OutlinedTextField(
+                                    value = timeSecText,
+                                    onValueChange = { timeSecText = it.filter { c -> c.isDigit() } },
+                                    label = { Text("Giây") },
+                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+                                    singleLine = true,
+                                    shape = RoundedCornerShape(20.dp),
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+
+                            Spacer(modifier = Modifier.height(14.dp))
+
+                            // Regenerate button
+                            Button(
+                                onClick = {
+                                    val min = timeMinText.toIntOrNull() ?: 0
+                                    val sec = timeSecText.toIntOrNull() ?: 0
+                                    val totalSec = min * 60.0 + sec
+                                    if (totalSec <= 0) {
+                                        Toast.makeText(context, "Vui lòng nhập thời gian chạy 3km hợp lệ!", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    if (raceDate.isBlank()) {
+                                        Toast.makeText(context, "Vui lòng chọn ngày chạy giải!", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    if (age <= 0) {
+                                        Toast.makeText(context, "Vui lòng nhập tuổi hợp lệ!", Toast.LENGTH_SHORT).show()
+                                        return@Button
+                                    }
+                                    showRegenerateConfirm = true
+                                },
+                                colors = ButtonDefaults.buttonColors(
+                                    containerColor = MaterialTheme.colorScheme.primary
+                                ),
+                                shape = RoundedCornerShape(12.dp),
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Icon(
+                                    imageVector = Icons.Default.Refresh,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Spacer(modifier = Modifier.width(8.dp))
+                                Text(
+                                    text = "Tạo Lại Giáo Án",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 14.sp
+                                )
+                            }
+                        }
+                    }
+                }
+
+                if (sortedWorkouts.isEmpty()) {
+                    Box(
+                        modifier = Modifier.fillMaxSize(),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            text = "Không có bài tập nào. Hãy tạo mới hoặc hoàn thành onboarding để tự sinh giáo án.",
+                            textAlign = TextAlign.Center,
+                            modifier = Modifier.padding(32.dp),
+                            color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f)
+                        )
+                    }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        groupedWorkouts.forEach { (monthStr, weeksList) ->
+                            item(key = "month_header_$monthStr") {
+                                Box(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(top = 16.dp, bottom = 8.dp)
+                                ) {
+                                    Text(
+                                        text = monthStr.uppercase(),
+                                        fontSize = 15.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier
+                                            .background(
+                                                color = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                                                shape = RoundedCornerShape(8.dp)
+                                            )
+                                            .padding(horizontal = 12.dp, vertical = 6.dp)
+                                    )
+                                }
+                            }
+
+                            weeksList.forEach { (weekNum, workoutsInWeek) ->
+                                item(key = "week_header_${monthStr}_$weekNum") {
+                                    Row(
+                                        modifier = Modifier
+                                            .fillMaxWidth()
+                                            .padding(start = 4.dp, top = 8.dp, bottom = 4.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.DateRange,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.secondary,
+                                            modifier = Modifier.size(16.dp)
+                                        )
+                                        Spacer(modifier = Modifier.width(6.dp))
+                                        Text(
+                                            text = "Tuần $weekNum",
+                                            fontSize = 13.sp,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.secondary
+                                        )
+                                    }
+                                }
+
+                                items(workoutsInWeek, key = { workoutItem -> workoutItem.date }) { workout ->
+                                    CustomWorkoutCard(
+                                        workout = workout,
+                                        onEdit = { editingWorkout = workout },
+                                        onDelete = {
+                                            viewModel.deleteWorkout(workout)
+                                            Toast.makeText(context, "Đã xóa bài tập ngày ${workout.date}", Toast.LENGTH_SHORT).show()
+                                        },
+                                        dragAndDropState = dragAndDropState,
+                                        workoutsList = workoutsList
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        // Drag preview overlay
+        if (dragAndDropState.isDragging && dragAndDropState.dragItem != null) {
+            val dragItem = dragAndDropState.dragItem!!
+            val offset = dragAndDropState.currentDragPosition - Offset(150f, 60f)
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(Color.Black.copy(alpha = 0.2f))
+            ) {
+                Box(
+                    modifier = Modifier
+                        .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
+                        .width(320.dp)
+                        .shadow(16.dp, RoundedCornerShape(12.dp))
+                        .alpha(1.0f)
+                ) {
+                    CustomWorkoutCard(
+                        workout = dragItem,
+                        onEdit = {},
+                        onDelete = {},
+                        isDragging = true
                     )
                 }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
+            }
+        }
+    }
+
+    // Swap confirmation dialog
+    if (showSwapConfirmation && swapSourceWorkout != null && swapTargetWorkout != null) {
+        Dialog(
+            onDismissRequest = { showSwapConfirmation = false },
+            properties = DialogProperties(usePlatformDefaultWidth = false)
+        ) {
+            Card(
+                shape = RoundedCornerShape(24.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                modifier = Modifier
+                    .fillMaxWidth(0.92f)
+                    .padding(16.dp)
+            ) {
+                Column(
+                    modifier = Modifier.padding(20.dp),
+                    verticalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    items(sortedWorkouts, key = { it.date }) { workout ->
-                        CustomWorkoutCard(
-                            workout = workout,
-                            onEdit = { editingWorkout = workout },
-                            onDelete = {
-                                viewModel.deleteWorkout(workout)
-                                Toast.makeText(context, "Đã xóa bài tập ngày ${workout.date}", Toast.LENGTH_SHORT).show()
-                            }
-                        )
+                    Text(
+                        text = "Đổi lịch tập luyện",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 18.sp,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+
+                    val dateAStr = try {
+                        val d = LocalDate.parse(swapSourceWorkout!!.date)
+                        val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
+                        "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
+                    } catch (e: Exception) { swapSourceWorkout!!.date }
+
+                    val dateBStr = try {
+                        val d = LocalDate.parse(swapTargetWorkout!!.date)
+                        val names = listOf("Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7", "CN")
+                        "${names[d.dayOfWeek.value - 1]} ${d.dayOfMonth}/${d.monthValue}"
+                    } catch (e: Exception) { swapTargetWorkout!!.date }
+
+                    Text(
+                        text = "Bạn muốn tráo đổi bài tập giữa ngày $dateAStr và $dateBStr cho chỉ tuần này hay áp dụng cho toàn bộ các tuần tiếp theo?",
+                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = {
+                                showSwapConfirmation = false
+                                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = false)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f),
+                            colors = ButtonDefaults.buttonColors(
+                                containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                                contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                            )
+                        ) {
+                            Text("Chỉ tuần này", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                        Button(
+                            onClick = {
+                                showSwapConfirmation = false
+                                viewModel.swapWorkouts(swapSourceWorkout!!, swapTargetWorkout!!, applyToSubsequentWeeks = true)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text("Tất cả tuần sau", fontSize = 12.sp, fontWeight = FontWeight.Bold)
+                        }
+                    }
+
+                    OutlinedButton(
+                        onClick = { showSwapConfirmation = false },
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth(),
+                        border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f)),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error)
+                    ) {
+                        Text("Hủy", fontWeight = FontWeight.Bold)
                     }
                 }
             }
         }
     }
 
-    // Dialog Add/Edit
-    if (showAddDialog) {
-        AddEditWorkoutDialog(
-            workout = null,
-            onDismiss = { showAddDialog = false },
-            onConfirm = { newWorkout ->
-                viewModel.upsertWorkout(newWorkout)
-                showAddDialog = false
-                Toast.makeText(context, "Đã thêm bài tập mới!", Toast.LENGTH_SHORT).show()
+    // Regenerate confirmation dialog
+    if (showRegenerateConfirm) {
+        AlertDialog(
+            onDismissRequest = { showRegenerateConfirm = false },
+            title = { Text("Tạo lại giáo án mới?") },
+            text = {
+                Text("Hành động này sẽ XÓA TOÀN BỘ bài tập hiện tại và sinh lại giáo án mới dựa trên thông số bạn vừa nhập. Bạn có chắc chắn muốn tiếp tục không?")
             },
-            workoutsList = workoutsList
-        )
-    }
-
-    if (editingWorkout != null) {
-        AddEditWorkoutDialog(
-            workout = editingWorkout,
-            onDismiss = { editingWorkout = null },
-            onConfirm = { updatedWorkout ->
-                viewModel.upsertWorkout(updatedWorkout)
-                editingWorkout = null
-                Toast.makeText(context, "Đã cập nhật bài tập!", Toast.LENGTH_SHORT).show()
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showRegenerateConfirm = false
+                        val min = timeMinText.toIntOrNull() ?: 0
+                        val sec = timeSecText.toIntOrNull() ?: 0
+                        val totalSec = min * 60.0 + sec
+                        viewModel.regeneratePlan(
+                            raceDate = raceDate,
+                            targetDistance = targetDistance,
+                            gender = gender,
+                            age = age,
+                            timeSeconds = totalSec
+                        ) {
+                            Toast.makeText(context, "Đã tạo lại giáo án mới thành công!", Toast.LENGTH_SHORT).show()
+                            isExpanded = false
+                        }
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Đồng ý", color = MaterialTheme.colorScheme.onError)
+                }
             },
-            workoutsList = workoutsList
+            dismissButton = {
+                TextButton(
+                    onClick = { showRegenerateConfirm = false }
+                ) {
+                    Text("Hủy")
+                }
+            }
         )
     }
 }
@@ -203,7 +804,10 @@ fun CustomPlanScreen(
 fun CustomWorkoutCard(
     workout: WorkoutEntity,
     onEdit: () -> Unit,
-    onDelete: () -> Unit
+    onDelete: () -> Unit,
+    dragAndDropState: DragAndDropState? = null,
+    workoutsList: List<WorkoutEntity> = emptyList(),
+    isDragging: Boolean = false
 ) {
     val wColor = workoutTypeColor(workout)
     val icon = workoutTypeIcon(workout)
@@ -215,13 +819,26 @@ fun CustomWorkoutCard(
         } catch (e: Exception) { workout.date }
     }
 
+    val isHovered = dragAndDropState?.hoverItem?.date == workout.date
+
+    val dragModifier = if (dragAndDropState != null) {
+        Modifier.workoutDragAndDropTarget(workout, dragAndDropState, workoutsList)
+    } else {
+        Modifier
+    }
+
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(dragModifier),
         colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
+            containerColor = if (isDragging) MaterialTheme.colorScheme.surface else MaterialTheme.colorScheme.surface.copy(alpha = 0.85f)
         ),
         shape = RoundedCornerShape(16.dp),
-        border = BorderStroke(1.dp, wColor.copy(alpha = 0.2f))
+        border = BorderStroke(
+            if (isHovered) 2.dp else 1.dp,
+            if (isHovered) MaterialTheme.colorScheme.primary else wColor.copy(alpha = if (isDragging) 0.6f else 0.2f)
+        )
     ) {
         Row(
             modifier = Modifier
@@ -253,7 +870,7 @@ fun CustomWorkoutCard(
                     Text(
                         text = "$formattedDate · Tuần ${workout.weekNumber}",
                         fontSize = 11.sp,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDragging) 0.8f else 0.5f)
                     )
                     Text(
                         text = workout.description,
@@ -266,9 +883,9 @@ fun CustomWorkoutCard(
                             " - Pace: " + VdotCalculator.formatPace(workout.targetPaceSec)
                         } else ""
                         Text(
-                            text = "${workout.targetDistanceKm} km$paceStr",
+                            text = "${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km$paceStr",
                             fontSize = 12.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDragging) 0.9f else 0.7f),
                             fontWeight = FontWeight.Medium
                         )
                     }
@@ -359,9 +976,10 @@ fun AddEditWorkoutDialog(
                         leadingIcon = { Icon(Icons.Default.CalendarToday, contentDescription = null) },
                         readOnly = true,
                         enabled = false,
+                        shape = RoundedCornerShape(20.dp),
                         colors = OutlinedTextFieldDefaults.colors(
                             disabledTextColor = MaterialTheme.colorScheme.onSurface,
-                            disabledBorderColor = MaterialTheme.colorScheme.outline,
+                            disabledBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
                             disabledLabelColor = MaterialTheme.colorScheme.onSurfaceVariant
                         ),
                         modifier = Modifier.fillMaxWidth()
@@ -380,6 +998,7 @@ fun AddEditWorkoutDialog(
                             readOnly = true,
                             label = { Text("Loại bài tập") },
                             trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(expanded = expandedDropdown) },
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.menuAnchor().fillMaxWidth()
                         )
                         ExposedDropdownMenu(
@@ -418,6 +1037,7 @@ fun AddEditWorkoutDialog(
                     onValueChange = { description = it },
                     label = { Text("Mô tả bài chạy") },
                     singleLine = true,
+                    shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -429,6 +1049,7 @@ fun AddEditWorkoutDialog(
                         label = { Text("Cự ly mục tiêu (km)") },
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                         singleLine = true,
+                        shape = RoundedCornerShape(20.dp),
                         modifier = Modifier.fillMaxWidth()
                     )
 
@@ -443,6 +1064,7 @@ fun AddEditWorkoutDialog(
                             label = { Text("Pace (Phút)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         )
                         OutlinedTextField(
@@ -451,6 +1073,7 @@ fun AddEditWorkoutDialog(
                             label = { Text("Pace (Giây)") },
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             singleLine = true,
+                            shape = RoundedCornerShape(20.dp),
                             modifier = Modifier.weight(1f)
                         )
                     }
@@ -462,6 +1085,7 @@ fun AddEditWorkoutDialog(
                     onValueChange = { instructions = it },
                     label = { Text("Hướng dẫn kỹ thuật") },
                     maxLines = 3,
+                    shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 
@@ -471,6 +1095,7 @@ fun AddEditWorkoutDialog(
                     onValueChange = { notes = it },
                     label = { Text("Ghi chú cá nhân (nếu có)") },
                     maxLines = 2,
+                    shape = RoundedCornerShape(20.dp),
                     modifier = Modifier.fillMaxWidth()
                 )
 

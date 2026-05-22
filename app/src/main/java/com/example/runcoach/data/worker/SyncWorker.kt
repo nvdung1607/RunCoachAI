@@ -93,6 +93,12 @@ class SyncWorker(
                 }
             }
             
+            // Send widget update broadcast
+            val intent = android.content.Intent(applicationContext, com.example.runcoach.presentation.receiver.RaceCountdownWidget::class.java).apply {
+                action = "com.example.runcoach.ACTION_REFRESH_WIDGET"
+            }
+            applicationContext.sendBroadcast(intent)
+
             return Result.success()
         } catch (e: Exception) {
             com.example.runcoach.utils.AppLogger.e("SyncWorker doWork failed", e)

@@ -27,6 +27,9 @@ interface WorkoutDao {
     @Query("SELECT * FROM workouts ORDER BY date ASC")
     fun getAllWorkoutsFlow(): Flow<List<WorkoutEntity>>
 
+    @Query("SELECT * FROM workouts ORDER BY date ASC")
+    suspend fun getAllWorkoutsDirect(): List<WorkoutEntity>
+
     @Query("SELECT * FROM workouts WHERE weekNumber = :weekNumber ORDER BY date ASC")
     fun getWorkoutsByWeekFlow(weekNumber: Int): Flow<List<WorkoutEntity>>
 
@@ -41,6 +44,9 @@ interface WorkoutDao {
 
     @Query("SELECT COUNT(*) FROM workouts WHERE weekNumber = :weekNumber AND type IN ('EASY','LONG','TEMPO','RECOVERY','INTERVAL','REPETITION')")
     suspend fun countRunsInWeek(weekNumber: Int): Int
+
+    @Query("SELECT * FROM workouts WHERE weekNumber >= :weekNumber ORDER BY date ASC")
+    suspend fun getWorkoutsFromWeekDirect(weekNumber: Int): List<WorkoutEntity>
 
     @Query("DELETE FROM workouts")
     suspend fun clearAllWorkouts()

@@ -1,7 +1,16 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="widget_bg_color">#F2121212</color> <!-- 95% Dark -->
-    <color name="widget_stroke_color">#33FFFFFF</color> <!-- Light grey border -->
-    <color name="widget_text_primary">#FFFFFF</color> <!-- White text for dark background -->
-    <color name="widget_text_secondary">#A0A0A5</color> <!-- Grey text -->
+    <color name="widget_bg_start">#0F172A</color> <!-- slate-900 -->
+    <color name="widget_bg_end">#1E293B</color> <!-- slate-800 -->
+    <color name="widget_stroke_color">#1AFFFFFF</color> <!-- subtle white -->
+    <color name="widget_card_bg">#14FFFFFF</color> <!-- glass layout -->
+    <color name="widget_card_stroke_color">#0AFFFFFF</color>
+    <color name="widget_text_primary">#F8FAFC</color>
+    <color name="widget_text_secondary">#94A3B8</color>
+    <color name="widget_accent_blue">#3B82F6</color>
+    <color name="widget_accent_green">#10B981</color>
+    <color name="widget_accent_indigo">#6366F1</color>
+    <color name="widget_accent_amber">#F59E0B</color>
+    <color name="widget_streak_bg_color">#2A1A08</color>
+    <color name="widget_streak_stroke_color">#4DFFFFFF</color>
 </resources>

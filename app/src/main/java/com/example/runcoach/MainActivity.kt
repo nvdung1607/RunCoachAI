@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.health.connect.client.HealthConnectClient
 import com.example.runcoach.data.health.HealthConnectManager
+import kotlinx.coroutines.flow.first
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -30,6 +31,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.MaterialTheme
@@ -71,6 +73,45 @@ class MainActivity : ComponentActivity() {
         setContent {
             val userPrefs by viewModel.userPreferences.collectAsState()
             val context = LocalContext.current
+            var isInitialLoadComplete by remember { mutableStateOf(false) }
+
+            val healthConnectManager = remember { HealthConnectManager(context) }
+            var hasCheckedPermissions by remember { mutableStateOf(false) }
+            var hcPermissionsGranted by remember { mutableStateOf(false) }
+
+            val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                ContextCompat.checkSelfPermission(
+                    context,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) == PackageManager.PERMISSION_GRANTED
+            } else {
+                true
+            }
+
+            val hcStatus = remember {
+                try {
+                    HealthConnectClient.getSdkStatus(context)
+                } catch (e: Exception) {
+                    HealthConnectClient.SDK_UNAVAILABLE
+                }
+            }
+            val isHcAvailable = hcStatus == HealthConnectClient.SDK_AVAILABLE
+
+            LaunchedEffect(Unit) {
+                // Force suspension until DataStore finishes loading preference files from disk
+                val repository = (application as RunCoachApplication).userPreferencesRepository
+                val initialPrefs = repository.userPreferencesFlow.first()
+
+                hcPermissionsGranted = healthConnectManager.hasPermissions()
+                hasCheckedPermissions = true
+
+                val isHcOk = hcPermissionsGranted || !isHcAvailable
+                if (hasNotificationPermission && isHcOk && !initialPrefs.hasCompletedPermissionSetup && initialPrefs.raceDate.isNotEmpty()) {
+                    com.example.runcoach.utils.AppLogger.d("All permissions already granted. Auto-completing permission setup.")
+                    viewModel.completePermissionSetup()
+                }
+                isInitialLoadComplete = true
+            }
 
             val isDarkTheme = when (userPrefs.themeMode) {
                 "LIGHT" -> false
@@ -80,40 +121,12 @@ class MainActivity : ComponentActivity() {
 
             RunCoachTheme(darkTheme = isDarkTheme) {
                 Surface(modifier = Modifier.fillMaxSize()) {
+                    if (!isInitialLoadComplete) {
+                        // Keep screen blank matching the theme color during preference loading to avoid UI flicker
+                        return@Surface
+                    }
+
                     val navController = rememberNavController()
-
-                    val healthConnectManager = remember { HealthConnectManager(context) }
-                    var hasCheckedPermissions by remember { mutableStateOf(false) }
-                    var hcPermissionsGranted by remember { mutableStateOf(false) }
-
-                    val hasNotificationPermission = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        ContextCompat.checkSelfPermission(
-                            context,
-                            Manifest.permission.POST_NOTIFICATIONS
-                        ) == PackageManager.PERMISSION_GRANTED
-                    } else {
-                        true
-                    }
-
-                    val hcStatus = remember {
-                        try {
-                            HealthConnectClient.getSdkStatus(context)
-                        } catch (e: Exception) {
-                            HealthConnectClient.SDK_UNAVAILABLE
-                        }
-                    }
-                    val isHcAvailable = hcStatus == HealthConnectClient.SDK_AVAILABLE
-
-                    LaunchedEffect(Unit) {
-                        hcPermissionsGranted = healthConnectManager.hasPermissions()
-                        hasCheckedPermissions = true
-
-                        val isHcOk = hcPermissionsGranted || !isHcAvailable
-                        if (hasNotificationPermission && isHcOk && !userPrefs.hasCompletedPermissionSetup && userPrefs.raceDate.isNotEmpty()) {
-                            com.example.runcoach.utils.AppLogger.d("All permissions already granted. Auto-completing permission setup.")
-                            viewModel.completePermissionSetup()
-                        }
-                    }
 
                     val startDestination = when {
                         userPrefs.raceDate.isEmpty() -> "onboarding"
@@ -139,10 +152,19 @@ class MainActivity : ComponentActivity() {
                                 NavigationBar(
                                     containerColor = MaterialTheme.colorScheme.surface,
                                 ) {
+                                    val navColors = NavigationBarItemDefaults.colors(
+                                        selectedIconColor = MaterialTheme.colorScheme.primary,
+                                        selectedTextColor = MaterialTheme.colorScheme.primary,
+                                        indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f),
+                                        unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f),
+                                        unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    )
+
                                     NavigationBarItem(
                                         icon = { Icon(Icons.Default.Home, contentDescription = "Trang chủ") },
                                         label = { Text("Trang chủ") },
                                         selected = currentRoute == "dashboard",
+                                        colors = navColors,
                                         onClick = {
                                             navController.navigate("dashboard") {
                                                 popUpTo("dashboard") { inclusive = false }
@@ -154,6 +176,7 @@ class MainActivity : ComponentActivity() {
                                         icon = { Icon(Icons.Default.List, contentDescription = "Giáo án") },
                                         label = { Text("Giáo án") },
                                         selected = currentRoute == "plan",
+                                        colors = navColors,
                                         onClick = {
                                             navController.navigate("plan") {
                                                 popUpTo("dashboard") { inclusive = false }
@@ -165,6 +188,7 @@ class MainActivity : ComponentActivity() {
                                         icon = { Icon(Icons.Default.History, contentDescription = "Lịch sử") },
                                         label = { Text("Lịch sử") },
                                         selected = currentRoute == "history",
+                                        colors = navColors,
                                         onClick = {
                                             navController.navigate("history") {
                                                 popUpTo("dashboard") { inclusive = false }
@@ -176,6 +200,7 @@ class MainActivity : ComponentActivity() {
                                         icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "Lịch tháng") },
                                         label = { Text("Lịch tháng") },
                                         selected = currentRoute == "calendar",
+                                        colors = navColors,
                                         onClick = {
                                             navController.navigate("calendar") {
                                                 popUpTo("dashboard") { inclusive = false }

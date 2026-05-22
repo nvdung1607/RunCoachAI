@@ -33,9 +33,18 @@ class VdotCalculatorTest {
     @Test
     fun testFormatPace() {
         val formatted = VdotCalculator.formatPace(485) // 8 minutes 5 seconds
-        assertEquals("8:05 phút/km", formatted)
+        assertEquals("8:05\u00A0phút/km", formatted)
         
         val formatted2 = VdotCalculator.formatPace(360) // 6 minutes 0 seconds
-        assertEquals("6:00 phút/km", formatted2)
+        assertEquals("6:00\u00A0phút/km", formatted2)
+    }
+
+    @Test
+    fun testGet3kTimeFromVdot() {
+        val targetVdot = 35.0
+        val timeSec = VdotCalculator.get3kTimeFromVdot(targetVdot)
+        val calculatedVdot = VdotCalculator.calculateVdotFor3k(timeSec)
+        
+        assertEquals(targetVdot, calculatedVdot, 0.01)
     }
 }
