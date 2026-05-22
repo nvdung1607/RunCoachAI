@@ -815,6 +815,34 @@ fun CustomPlanScreen(
             }
         )
     }
+
+    if (showAddDialog) {
+        AddEditWorkoutDialog(
+            workout = null,
+            onDismiss = { showAddDialog = false },
+            onConfirm = { newWorkout ->
+                showAddDialog = false
+                viewModel.upsertWorkout(newWorkout)
+            },
+            workoutsList = sortedWorkouts
+        )
+    }
+
+    if (editingWorkout != null) {
+        AddEditWorkoutDialog(
+            workout = editingWorkout,
+            onDismiss = { editingWorkout = null },
+            onConfirm = { updatedWorkout ->
+                val oldWorkout = editingWorkout
+                editingWorkout = null
+                if (oldWorkout != null && oldWorkout.date != updatedWorkout.date) {
+                    viewModel.deleteWorkout(oldWorkout)
+                }
+                viewModel.upsertWorkout(updatedWorkout)
+            },
+            workoutsList = sortedWorkouts
+        )
+    }
 }
 
 @Composable
