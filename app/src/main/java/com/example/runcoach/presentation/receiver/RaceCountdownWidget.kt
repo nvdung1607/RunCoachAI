@@ -105,8 +105,8 @@ class RaceCountdownWidget : AppWidgetProvider() {
                     if (todayWorkout.type in listOf("REST", "CT")) {
                         views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_rest)
                         views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_accent_indigo))
-                        views.setTextViewText(R.id.widget_workout_title, "NGHỈ NGƠI")
-                        views.setTextViewText(R.id.widget_workout_desc, "Để cơ bắp phục hồi")
+                        views.setTextViewText(R.id.widget_workout_title, "REST DAY")
+                        views.setTextViewText(R.id.widget_workout_desc, "Nghỉ ngơi")
                     } else {
                         if (todayWorkout.isCompleted) {
                             views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_check)
@@ -132,10 +132,10 @@ class RaceCountdownWidget : AppWidgetProvider() {
                         }
                     }
                 } else {
-                    views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_none)
-                    views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_text_secondary))
-                    views.setTextViewText(R.id.widget_workout_title, "KHÔNG CÓ LỊCH")
-                    views.setTextViewText(R.id.widget_workout_desc, "Nghỉ ngơi hoặc chạy tự do")
+                    views.setImageViewResource(R.id.widget_workout_icon, R.drawable.ic_widget_rest)
+                    views.setInt(R.id.widget_workout_icon, "setColorFilter", context.getColor(R.color.widget_accent_indigo))
+                    views.setTextViewText(R.id.widget_workout_title, "REST DAY")
+                    views.setTextViewText(R.id.widget_workout_desc, "Nghỉ ngơi")
                 }
                 
             } catch (e: Exception) {
@@ -151,7 +151,9 @@ class RaceCountdownWidget : AppWidgetProvider() {
 
         // PendingIntent to launch MainActivity when clicking any part of the widget
         val mainIntent = Intent(context, MainActivity::class.java).apply {
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TASK
+            action = Intent.ACTION_MAIN
+            addCategory(Intent.CATEGORY_LAUNCHER)
+            flags = Intent.FLAG_ACTIVITY_NEW_TASK
         }
         val pendingIntent = PendingIntent.getActivity(
             context,

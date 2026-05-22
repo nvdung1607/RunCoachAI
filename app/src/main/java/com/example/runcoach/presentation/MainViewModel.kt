@@ -301,10 +301,23 @@ class MainViewModel(
                                     syncSource = "HEALTH_CONNECT"
                                 )
                                 
-                                val updatedOtherWorkout = workoutOnSessionDate?.copy(
-                                    date = workout.date,
-                                    weekNumber = workout.weekNumber
-                                )
+                                val updatedOtherWorkout = if (workoutOnSessionDate != null) {
+                                    workoutOnSessionDate.copy(
+                                        date = workout.date,
+                                        weekNumber = workout.weekNumber
+                                    )
+                                } else {
+                                    WorkoutEntity(
+                                        date = workout.date,
+                                        weekNumber = workout.weekNumber,
+                                        type = "REST",
+                                        targetDistanceKm = 0.0,
+                                        targetPaceSec = 0,
+                                        description = "Nghỉ ngơi hoàn toàn",
+                                        instructions = "Cơ thể phục hồi và phát triển trong những ngày nghỉ.",
+                                        isCompleted = false
+                                    )
+                                }
                                 
                                 // Delete both old keys first
                                 workoutDao.delete(workout)
@@ -495,10 +508,23 @@ class MainViewModel(
                         syncSource = "HEALTH_CONNECT"
                     )
                     
-                    val updatedOtherWorkout = shift.workoutOnNewDate?.copy(
-                        date = shift.originalDate,
-                        weekNumber = shift.workout.weekNumber
-                    )
+                    val updatedOtherWorkout = if (shift.workoutOnNewDate != null) {
+                        shift.workoutOnNewDate.copy(
+                            date = shift.originalDate,
+                            weekNumber = shift.workout.weekNumber
+                        )
+                    } else {
+                        WorkoutEntity(
+                            date = shift.originalDate,
+                            weekNumber = shift.workout.weekNumber,
+                            type = "REST",
+                            targetDistanceKm = 0.0,
+                            targetPaceSec = 0,
+                            description = "Nghỉ ngơi hoàn toàn",
+                            instructions = "Cơ thể phục hồi và phát triển trong những ngày nghỉ.",
+                            isCompleted = false
+                        )
+                    }
                     
                     // Delete old records first to prevent primary key constraint errors
                     workoutDao.delete(shift.workout)

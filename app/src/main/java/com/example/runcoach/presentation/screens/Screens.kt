@@ -16,6 +16,9 @@ import androidx.core.content.ContextCompat
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
@@ -452,8 +455,8 @@ fun TestRunScreen(
     onNavigateBack: () -> Unit
 ) {
     val userPrefs by viewModel.userPreferences.collectAsState()
-    var minText by remember { mutableStateOf("") }
-    var secText by remember { mutableStateOf("") }
+    var minText by remember { mutableStateOf("15") }
+    var secText by remember { mutableStateOf("00") }
     val context = LocalContext.current
     val coroutineScope = rememberCoroutineScope()
     val healthConnectManager = remember { HealthConnectManager(context) }
@@ -525,7 +528,7 @@ fun TestRunScreen(
                 .fillMaxWidth()
                 .verticalScroll(rememberScrollState())
         ) {
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.Start
@@ -538,20 +541,20 @@ fun TestRunScreen(
                     )
                 }
             }
-            Spacer(modifier = Modifier.height(8.dp))
+            Spacer(modifier = Modifier.height(4.dp))
             Box(
                 modifier = Modifier
-                    .size(80.dp)
-                    .clip(RoundedCornerShape(20.dp))
+                    .size(60.dp)
+                    .clip(RoundedCornerShape(16.dp))
                     .background(MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)),
                 contentAlignment = Alignment.Center
             ) {
-                Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(44.dp))
+                Icon(Icons.Default.FitnessCenter, contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
+            Spacer(modifier = Modifier.height(8.dp))
             Text("Bài Kiểm Tra Thể Lực", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Spacer(modifier = Modifier.height(12.dp))
+            Spacer(modifier = Modifier.height(6.dp))
             Text(
                 "Chạy 3km hết sức để đo lường khả năng tim mạch (VDOT). Kết quả này sẽ cá nhân hóa toàn bộ giáo án của bạn.",
                 fontSize = 16.sp,
@@ -560,7 +563,7 @@ fun TestRunScreen(
                 lineHeight = 22.sp
             )
 
-            Spacer(modifier = Modifier.height(24.dp))
+            Spacer(modifier = Modifier.height(12.dp))
 
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.8f)),
@@ -568,30 +571,60 @@ fun TestRunScreen(
                 border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.1f)),
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Column(modifier = Modifier.padding(20.dp)) {
+                Column(modifier = Modifier.padding(12.dp)) {
                     Text("Thời gian chạy 3km tốt nhất", fontSize = 18.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.height(16.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        OutlinedTextField(
-                            value = minText,
-                            onValueChange = { minText = it },
-                            label = { Text("Phút") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.weight(1f)
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 8.dp),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        val minutesList = remember { (5..45).map { it.toString() } }
+                        val secondsList = remember { (0..59).map { String.format("%02d", it) } }
+
+                        val minInt = minText.toIntOrNull() ?: 15
+                        val initialMinIndex = remember { (minInt - 5).coerceIn(0, minutesList.size - 1) }
+
+                        val secInt = secText.toIntOrNull() ?: 0
+                        val initialSecIndex = remember { secInt.coerceIn(0, secondsList.size - 1) }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Phút", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            WheelPicker(
+                                items = minutesList,
+                                initialIndex = initialMinIndex,
+                                onItemSelected = { index ->
+                                    minText = minutesList[index]
+                                }
+                            )
+                        }
+
+                        Text(
+                            text = ":",
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.padding(horizontal = 16.dp).padding(top = 12.dp)
                         )
-                        OutlinedTextField(
-                            value = secText,
-                            onValueChange = { secText = it },
-                            label = { Text("Giây") },
-                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                            shape = RoundedCornerShape(20.dp),
-                            modifier = Modifier.weight(1f)
-                        )
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text("Giây", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            Spacer(modifier = Modifier.height(8.dp))
+                            WheelPicker(
+                                items = secondsList,
+                                initialIndex = initialSecIndex,
+                                onItemSelected = { index ->
+                                    secText = secondsList[index]
+                                }
+                            )
+                        }
                     }
 
-                    Spacer(modifier = Modifier.height(12.dp))
+                    Spacer(modifier = Modifier.height(8.dp))
 
                     // VDOT Preview - realtime feedback
                     val previewTotalSec = remember(minText, secText) {
@@ -805,7 +838,7 @@ fun TestRunScreen(
                 }
             }
 
-            Spacer(modifier = Modifier.height(40.dp))
+            Spacer(modifier = Modifier.height(16.dp))
 
             Button(
                 onClick = {
@@ -851,8 +884,10 @@ fun TestRunScreen(
                 shape = RoundedCornerShape(16.dp),
                 modifier = Modifier.fillMaxWidth().height(56.dp)
             ) {
-                Text("Sinh Giáo Án & Bắt Đầu →", fontSize = 16.sp, fontWeight = FontWeight.Bold)
+                Text("Sinh Giáo Án & Bắt Đầu", fontSize = 16.sp, fontWeight = FontWeight.Bold)
             }
+
+            Spacer(modifier = Modifier.height(32.dp))
         }
 
         if (showFeasibilityDialog && feasibilityReport != null) {
@@ -1115,145 +1150,6 @@ fun DashboardScreen(
             }
         }
 
-        // Countdown + VDOT card
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showRaceDayInfo = true }
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth().padding(20.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text("Race Day: ${userPrefs.raceDate}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
-                        Text("Còn $totalDays ngày 🏁", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-                        Spacer(modifier = Modifier.height(4.dp))
-                        LinearProgressIndicator(
-                            progress = {
-                                val total = try {
-                                    ChronoUnit.DAYS.between(LocalDate.now().minusDays(workoutsList.size.toLong()), LocalDate.parse(userPrefs.raceDate)).toFloat()
-                                } catch (e: Exception) { 1f }
-                                val completed = workoutsList.count { it.isCompleted }.toFloat()
-                                if (total > 0) (completed / total).coerceIn(0f, 1f) else 0f
-                            },
-                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
-                            color = MaterialTheme.colorScheme.primary,
-                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                        )
-                        val completedCount = workoutsList.count { it.isCompleted }
-                        val totalCount = workoutsList.count { it.type !in listOf("REST") }
-                        Text("$completedCount / $totalCount buổi hoàn thành", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
-                    }
-                    Spacer(modifier = Modifier.width(20.dp))
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        Text("VDOT", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
-                        Text(String.format("%.1f", userPrefs.vdotScore), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
-                    }
-                }
-            }
-        }
-
-        // Prediction card
-        item {
-            val adherence = remember(workoutsList) {
-                val pastWorkouts = workoutsList.filter {
-                    try { LocalDate.parse(it.date).isBefore(LocalDate.now()) } catch(e: Exception) { false }
-                }
-                if (pastWorkouts.isEmpty()) 1.0
-                else {
-                    val completed = pastWorkouts.count { it.isCompleted }.toDouble()
-                    val running = pastWorkouts.count { it.type !in listOf("REST") }.toDouble()
-                    if (running > 0) completed / running else 1.0
-                }
-            }
-
-            val vdotEff = userPrefs.vdotScore.toDouble() * (0.7 + 0.3 * adherence)
-            val predictedSeconds = VdotCalculator.predictRaceTime(vdotEff, userPrefs.targetDistance.toDouble())
-
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showPredictionInfo = true }
-            ) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text("🔮 Dự đoán thành tích Race Day", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Column {
-                            Text("Thời gian mục tiêu (${userPrefs.targetDistance}km)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text(
-                                text = VdotCalculator.formatDuration(predictedSeconds),
-                                fontSize = 24.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                            val predictedPaceSec = if (userPrefs.targetDistance > 0) (predictedSeconds / userPrefs.targetDistance).toInt() else 0
-                            if (predictedPaceSec > 0) {
-                                Text(
-                                    text = "Pace: ${VdotCalculator.formatPace(predictedPaceSec)}",
-                                    fontSize = 13.sp,
-                                    fontWeight = FontWeight.Medium,
-                                    color = MaterialTheme.colorScheme.primary
-                                )
-                            }
-                        }
-                        Column(horizontalAlignment = Alignment.End) {
-                            Text("Độ tuân thủ giáo án", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
-                            Text(
-                                text = "${(adherence * 100).toInt()}%",
-                                fontSize = 16.sp,
-                                fontWeight = FontWeight.Bold,
-                                color = if (adherence > 0.8) ColorCompleted else if (adherence > 0.5) ColorWarning else ColorSkipped
-                            )
-                        }
-                    }
-                    if (adherence < 0.9) {
-                        Spacer(modifier = Modifier.height(6.dp))
-                        Text(
-                            "💡 Tăng tỉ lệ hoàn thành bài tập để đạt thời gian chạy tốt nhất!",
-                            fontSize = 11.sp,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                        )
-                    }
-                }
-            }
-        }
-
-        // Pace zones
-        item {
-            Card(
-                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                shape = RoundedCornerShape(20.dp),
-                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { showPaceZonesInfo = true }
-            ) {
-                Column(modifier = Modifier.padding(20.dp)) {
-                    Text("Vùng Pace cá nhân hóa", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
-                    Spacer(modifier = Modifier.height(14.dp))
-                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                        PaceChip("🟢 Easy", VdotCalculator.formatPace(userPrefs.easyPaceSec), ColorEasy)
-                        PaceChip("🔵 Long", VdotCalculator.formatPace(userPrefs.longPaceSec), ColorLong)
-                        PaceChip("🔴 Tempo", VdotCalculator.formatPace(userPrefs.tempoPaceSec), ColorTempo)
-                    }
-                }
-            }
-        }
-
         // Today's workout
         item {
             Text("Bài tập hôm nay", fontSize = 16.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
@@ -1392,6 +1288,145 @@ fun DashboardScreen(
                 ) {
                     Box(modifier = Modifier.padding(24.dp), contentAlignment = Alignment.Center) {
                         Text("😌 Hôm nay là ngày nghỉ ngoài lịch tập.", color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f), textAlign = TextAlign.Center)
+                    }
+                }
+            }
+        }
+
+        // Countdown + VDOT card
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.2f)),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.2f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showRaceDayInfo = true }
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth().padding(20.dp),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text("Race Day: ${userPrefs.raceDate}", fontSize = 12.sp, fontWeight = FontWeight.Medium, color = MaterialTheme.colorScheme.primary)
+                        Text("Còn $totalDays ngày 🏁", fontSize = 22.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
+                        Spacer(modifier = Modifier.height(4.dp))
+                        LinearProgressIndicator(
+                            progress = {
+                                val total = try {
+                                    ChronoUnit.DAYS.between(LocalDate.now().minusDays(workoutsList.size.toLong()), LocalDate.parse(userPrefs.raceDate)).toFloat()
+                                } catch (e: Exception) { 1f }
+                                val completed = workoutsList.count { it.isCompleted }.toFloat()
+                                if (total > 0) (completed / total).coerceIn(0f, 1f) else 0f
+                            },
+                            modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(4.dp)),
+                            color = MaterialTheme.colorScheme.primary,
+                            trackColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
+                        )
+                        val completedCount = workoutsList.count { it.isCompleted }
+                        val totalCount = workoutsList.count { it.type !in listOf("REST") }
+                        Text("$completedCount / $totalCount buổi hoàn thành", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.5f))
+                    }
+                    Spacer(modifier = Modifier.width(20.dp))
+                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Text("VDOT", fontSize = 11.sp, color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.6f))
+                        Text(String.format("%.1f", userPrefs.vdotScore), fontSize = 28.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                    }
+                }
+            }
+        }
+
+        // Prediction card
+        item {
+            val adherence = remember(workoutsList) {
+                val pastWorkouts = workoutsList.filter {
+                    try { LocalDate.parse(it.date).isBefore(LocalDate.now()) } catch(e: Exception) { false }
+                }
+                if (pastWorkouts.isEmpty()) 1.0
+                else {
+                    val completed = pastWorkouts.count { it.isCompleted }.toDouble()
+                    val running = pastWorkouts.count { it.type !in listOf("REST") }.toDouble()
+                    if (running > 0) completed / running else 1.0
+                }
+            }
+
+            val vdotEff = userPrefs.vdotScore.toDouble() * (0.7 + 0.3 * adherence)
+            val predictedSeconds = VdotCalculator.predictRaceTime(vdotEff, userPrefs.targetDistance.toDouble())
+
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.1f)),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.secondary.copy(alpha = 0.15f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPredictionInfo = true }
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Text("🔮 Dự đoán thành tích Race Day", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text("Thời gian mục tiêu (${userPrefs.targetDistance}km)", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text(
+                                text = VdotCalculator.formatDuration(predictedSeconds),
+                                fontSize = 24.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            val predictedPaceSec = if (userPrefs.targetDistance > 0) (predictedSeconds / userPrefs.targetDistance).toInt() else 0
+                            if (predictedPaceSec > 0) {
+                                Text(
+                                    text = "Pace: ${VdotCalculator.formatPace(predictedPaceSec)}",
+                                    fontSize = 13.sp,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text("Độ tuân thủ giáo án", fontSize = 11.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f))
+                            Text(
+                                text = "${(adherence * 100).toInt()}%",
+                                fontSize = 16.sp,
+                                fontWeight = FontWeight.Bold,
+                                color = if (adherence > 0.8) ColorCompleted else if (adherence > 0.5) ColorWarning else ColorSkipped
+                            )
+                        }
+                    }
+                    if (adherence < 0.9) {
+                        Spacer(modifier = Modifier.height(6.dp))
+                        Text(
+                            "💡 Tăng tỉ lệ hoàn thành bài tập để đạt thời gian chạy tốt nhất!",
+                            fontSize = 11.sp,
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                        )
+                    }
+                }
+            }
+        }
+
+        // Pace zones
+        item {
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                shape = RoundedCornerShape(20.dp),
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f)),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable { showPaceZonesInfo = true }
+            ) {
+                Column(modifier = Modifier.padding(20.dp)) {
+                    Text("Vùng Pace cá nhân hóa", fontSize = 14.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface)
+                    Spacer(modifier = Modifier.height(14.dp))
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        PaceChip("🟢 Easy", VdotCalculator.formatPace(userPrefs.easyPaceSec), ColorEasy)
+                        PaceChip("🔵 Long", VdotCalculator.formatPace(userPrefs.longPaceSec), ColorLong)
+                        PaceChip("🔴 Tempo", VdotCalculator.formatPace(userPrefs.tempoPaceSec), ColorTempo)
                     }
                 }
             }
@@ -1863,19 +1898,12 @@ fun DashboardScreen(
         )
     }
 
-    // Sync result dialog
-    if (syncResultMessage != null) {
-        AlertDialog(
-            onDismissRequest = { syncResultMessage = null },
-            icon = { Icon(Icons.Default.Sync, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
-            title = { Text("Đồng bộ Health Connect") },
-            text = { Text(syncResultMessage!!) },
-            confirmButton = {
-                Button(onClick = { syncResultMessage = null }) {
-                    Text("Đóng")
-                }
-            }
-        )
+    // Sync result Toast notification (replacing double popup)
+    LaunchedEffect(syncResultMessage) {
+        syncResultMessage?.let { msg ->
+            Toast.makeText(context, msg, Toast.LENGTH_SHORT).show()
+            syncResultMessage = null
+        }
     }
 
     // Sync Confirmation Dialog for Shifts/Swaps
@@ -3818,6 +3846,7 @@ fun PlanScreen(
                         .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
                         .width(itemWidth)
                         .shadow(16.dp, RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(12.dp))
                         .alpha(1.0f)
                 ) {
                     WorkoutDayRow(
@@ -4813,6 +4842,89 @@ fun ShareOptionRow(
                 tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                 modifier = Modifier.size(16.dp)
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun WheelPicker(
+    modifier: Modifier = Modifier,
+    items: List<String>,
+    initialIndex: Int = 0,
+    onItemSelected: (index: Int) -> Unit
+) {
+    val itemHeight = 36.dp
+    val listState = rememberLazyListState(initialFirstVisibleItemIndex = initialIndex)
+    val snapFlingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+    val coroutineScope = rememberCoroutineScope()
+    
+    // Calculate which item is currently in the middle
+    val selectedIndex by remember {
+        derivedStateOf {
+            val layoutInfo = listState.layoutInfo
+            if (layoutInfo.visibleItemsInfo.isEmpty()) initialIndex
+            else {
+                val center = (layoutInfo.viewportStartOffset + layoutInfo.viewportEndOffset) / 2
+                val closest = layoutInfo.visibleItemsInfo.minByOrNull {
+                    Math.abs((it.offset + it.size / 2) - center)
+                }
+                closest?.index ?: initialIndex
+            }
+        }
+    }
+    
+    // Notify when selectedIndex changes
+    LaunchedEffect(selectedIndex) {
+        onItemSelected(selectedIndex)
+    }
+    
+    Box(
+        modifier = modifier
+            .height(itemHeight * 3)
+            .width(80.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        // Highlight indicator for the middle item
+        Surface(
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(itemHeight)
+                .padding(horizontal = 4.dp),
+            shape = RoundedCornerShape(12.dp),
+            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.12f),
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.primary.copy(alpha = 0.3f))
+        ) {}
+        
+        LazyColumn(
+            state = listState,
+            flingBehavior = snapFlingBehavior,
+            contentPadding = PaddingValues(vertical = itemHeight), // Gives space so first/last items can be centered
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            itemsIndexed(items) { index, item ->
+                val isSelected = index == selectedIndex
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(itemHeight)
+                        .clickable {
+                            coroutineScope.launch {
+                                listState.animateScrollToItem(index)
+                            }
+                        },
+                    contentAlignment = Alignment.Center
+                ) {
+                    Text(
+                        text = item,
+                        fontSize = if (isSelected) 20.sp else 16.sp,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal,
+                        color = if (isSelected) MaterialTheme.colorScheme.primary 
+                                else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                    )
+                }
+            }
         }
     }
 }

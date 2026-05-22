@@ -55,6 +55,7 @@ fun CustomPlanScreen(
     var showAddDialog by remember { mutableStateOf(false) }
     var showExportMenu by remember { mutableStateOf(false) }
     var showRegenerateConfirm by remember { mutableStateOf(false) }
+    var deletingWorkoutConfirm by remember { mutableStateOf<WorkoutEntity?>(null) }
 
     // Plan parameter local states
     var isExpanded by remember { mutableStateOf(false) }
@@ -470,14 +471,19 @@ fun CustomPlanScreen(
                                 }
 
                                 Column(modifier = Modifier.weight(1f)) {
-                                    Spacer(modifier = Modifier.height(20.dp))
+                                    Text(
+                                        text = "Tuổi",
+                                        fontSize = 12.sp,
+                                        fontWeight = FontWeight.Medium,
+                                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                        modifier = Modifier.padding(start = 4.dp, bottom = 4.dp)
+                                    )
                                     OutlinedTextField(
                                         value = if (age > 0) age.toString() else "",
                                         onValueChange = {
                                             val clean = it.filter { c -> c.isDigit() }
                                             age = clean.toIntOrNull() ?: 0
                                         },
-                                        label = { Text("Tuổi") },
                                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                                         singleLine = true,
                                         shape = RoundedCornerShape(20.dp),
@@ -501,28 +507,56 @@ fun CustomPlanScreen(
                                 modifier = Modifier.padding(start = 4.dp)
                             )
                             Spacer(modifier = Modifier.height(4.dp))
-                            Row(
-                                modifier = Modifier.fillMaxWidth(),
-                                horizontalArrangement = Arrangement.spacedBy(10.dp)
-                            ) {
-                                OutlinedTextField(
-                                    value = timeMinText,
-                                    onValueChange = { timeMinText = it.filter { c -> c.isDigit() } },
-                                    label = { Text("Phút") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.weight(1f)
-                                )
-                                OutlinedTextField(
-                                    value = timeSecText,
-                                    onValueChange = { timeSecText = it.filter { c -> c.isDigit() } },
-                                    label = { Text("Giây") },
-                                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                                    singleLine = true,
-                                    shape = RoundedCornerShape(20.dp),
-                                    modifier = Modifier.weight(1f)
-                                )
+                            
+                            if (timeMinText.isNotEmpty() && timeSecText.isNotEmpty()) {
+                                Row(
+                                    modifier = Modifier
+                                        .fillMaxWidth()
+                                        .padding(vertical = 8.dp),
+                                    horizontalArrangement = Arrangement.Center,
+                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    val minutesList = remember { (5..45).map { it.toString() } }
+                                    val secondsList = remember { (0..59).map { String.format("%02d", it) } }
+
+                                    val minInt = timeMinText.toIntOrNull() ?: 15
+                                    val initialMinIndex = remember { (minInt - 5).coerceIn(0, minutesList.size - 1) }
+
+                                    val secInt = timeSecText.toIntOrNull() ?: 0
+                                    val initialSecIndex = remember { secInt.coerceIn(0, secondsList.size - 1) }
+
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Phút", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        WheelPicker(
+                                            items = minutesList,
+                                            initialIndex = initialMinIndex,
+                                            onItemSelected = { index ->
+                                                timeMinText = minutesList[index]
+                                            }
+                                        )
+                                    }
+
+                                    Text(
+                                        text = ":",
+                                        fontSize = 28.sp,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.primary,
+                                        modifier = Modifier.padding(horizontal = 16.dp).padding(top = 16.dp)
+                                    )
+
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("Giây", fontSize = 13.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                                        Spacer(modifier = Modifier.height(4.dp))
+                                        WheelPicker(
+                                            items = secondsList,
+                                            initialIndex = initialSecIndex,
+                                            onItemSelected = { index ->
+                                                timeSecText = secondsList[index]
+                                            }
+                                        )
+                                    }
+                                }
                             }
 
                             Spacer(modifier = Modifier.height(14.dp))
@@ -638,8 +672,7 @@ fun CustomPlanScreen(
                                         workout = workout,
                                         onEdit = { editingWorkout = workout },
                                         onDelete = {
-                                            viewModel.deleteWorkout(workout)
-                                            Toast.makeText(context, "Đã xóa bài tập ngày ${workout.date}", Toast.LENGTH_SHORT).show()
+                                            deletingWorkoutConfirm = workout
                                         },
                                         dragAndDropState = dragAndDropState,
                                         workoutsList = workoutsList
@@ -673,6 +706,7 @@ fun CustomPlanScreen(
                         .offset { IntOffset(offset.x.toInt(), offset.y.toInt()) }
                         .width(itemWidth)
                         .shadow(16.dp, RoundedCornerShape(16.dp))
+                        .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(16.dp))
                         .alpha(1.0f)
                 ) {
                     CustomWorkoutCard(
@@ -741,6 +775,38 @@ fun CustomPlanScreen(
             dismissButton = {
                 TextButton(
                     onClick = { showRegenerateConfirm = false }
+                ) {
+                    Text("Hủy")
+                }
+            }
+        )
+    }
+
+    if (deletingWorkoutConfirm != null) {
+        val targetWorkout = deletingWorkoutConfirm!!
+        AlertDialog(
+            onDismissRequest = { deletingWorkoutConfirm = null },
+            title = { Text("Xóa bài tập?") },
+            text = {
+                Text("Bạn có chắc chắn muốn xóa bài tập ngày ${targetWorkout.date} (${targetWorkout.description}) không?")
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        deletingWorkoutConfirm = null
+                        viewModel.deleteWorkout(targetWorkout)
+                        Toast.makeText(context, "Đã xóa bài tập ngày ${targetWorkout.date}", Toast.LENGTH_SHORT).show()
+                    },
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.error
+                    )
+                ) {
+                    Text("Có, Xóa", color = MaterialTheme.colorScheme.onError)
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    onClick = { deletingWorkoutConfirm = null }
                 ) {
                     Text("Hủy")
                 }
@@ -993,7 +1059,31 @@ fun AddEditWorkoutDialog(
                             onDismissRequest = { expandedDropdown = false }
                         ) {
                             workoutTypes.forEach { type ->
+                                val itemIcon = when (type) {
+                                    "LONG", "EASY" -> Icons.Default.DirectionsRun
+                                    "TEMPO", "INTERVAL" -> Icons.Default.Speed
+                                    "REPETITION" -> Icons.Default.TrendingUp
+                                    "RECOVERY" -> Icons.Default.SelfImprovement
+                                    "REST" -> Icons.Default.Bedtime
+                                    else -> Icons.Default.FitnessCenter
+                                }
+                                val itemColor = when (type) {
+                                    "LONG" -> ColorLong
+                                    "EASY" -> ColorEasy
+                                    "TEMPO", "INTERVAL" -> ColorTempo
+                                    "REPETITION" -> ColorTempo
+                                    "RECOVERY" -> ColorRecovery
+                                    else -> ColorRest
+                                }
                                 DropdownMenuItem(
+                                    leadingIcon = {
+                                        Icon(
+                                            imageVector = itemIcon,
+                                            contentDescription = null,
+                                            tint = itemColor,
+                                            modifier = Modifier.size(20.dp)
+                                        )
+                                    },
                                     text = { Text(type) },
                                     onClick = {
                                         selectedType = type
