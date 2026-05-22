@@ -4032,7 +4032,7 @@ fun WorkoutDayRow(
             workout.targetDistanceKm > 0 -> {
                 Column(horizontalAlignment = Alignment.End) {
                     Text("${String.format(java.util.Locale.US, "%.1f", workout.targetDistanceKm)} km", fontSize = 12.sp, color = MaterialTheme.colorScheme.onSurface.copy(alpha = if (isDragging) 0.8f else 0.5f))
-                    if (workout.type !in listOf("REST", "CT")) {
+                    if (workout.type !in listOf("REST", "CT", "RACE")) {
                         IconButton(onClick = onReschedule, modifier = Modifier.size(20.dp)) {
                             Icon(Icons.Default.SwapHoriz, contentDescription = "Dời lịch", tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f), modifier = Modifier.size(16.dp))
                         }
@@ -4393,58 +4393,64 @@ fun Modifier.workoutDragAndDropTarget(
     state: DragAndDropState,
     workoutsList: List<WorkoutEntity>
 ): Modifier {
-    return this
-        .onGloballyPositioned { coords ->
+    val base = this.onGloballyPositioned { coords ->
+        if (workout.type != "RACE") {
             state.itemBounds[workout.date] = coords.boundsInRoot()
         }
-        .pointerInput(workout, workoutsList) {
-            detectDragGesturesAfterLongPress(
-                onDragStart = { offset ->
-                    val rect = state.itemBounds[workout.date]
-                    if (rect != null) {
-                        state.dragItem = workout
-                        state.isDragging = true
-                        state.initialDragPosition = Offset(rect.left + offset.x, rect.top + offset.y)
-                        state.currentDragPosition = state.initialDragPosition
-                        state.dragOffset = Offset.Zero
-                        state.localTouchOffset = offset
-                    }
-                },
-                onDrag = { change, dragAmount ->
-                    change.consume()
-                    state.dragOffset += dragAmount
-                    state.currentDragPosition = state.initialDragPosition + state.dragOffset
+    }
 
-                    var foundHover: WorkoutEntity? = null
-                    val currentPos = state.currentDragPosition
-                    for ((date, rect) in state.itemBounds) {
-                        if (rect.contains(currentPos)) {
-                            val item = workoutsList.find { it.date == date }
-                            if (item != null) {
-                                foundHover = item
-                                break
-                            }
+    if (workout.type == "RACE") {
+        return base
+    }
+
+    return base.pointerInput(workout, workoutsList) {
+        detectDragGesturesAfterLongPress(
+            onDragStart = { offset ->
+                val rect = state.itemBounds[workout.date]
+                if (rect != null) {
+                    state.dragItem = workout
+                    state.isDragging = true
+                    state.initialDragPosition = Offset(rect.left + offset.x, rect.top + offset.y)
+                    state.currentDragPosition = state.initialDragPosition
+                    state.dragOffset = Offset.Zero
+                    state.localTouchOffset = offset
+                }
+            },
+            onDrag = { change, dragAmount ->
+                change.consume()
+                state.dragOffset += dragAmount
+                state.currentDragPosition = state.initialDragPosition + state.dragOffset
+
+                var foundHover: WorkoutEntity? = null
+                val currentPos = state.currentDragPosition
+                for ((date, rect) in state.itemBounds) {
+                    if (rect.contains(currentPos)) {
+                        val item = workoutsList.find { it.date == date }
+                        if (item != null && item.type != "RACE") {
+                            foundHover = item
+                            break
                         }
                     }
-                    if (foundHover != null && foundHover.weekNumber == state.dragItem?.weekNumber && foundHover.date != state.dragItem?.date) {
-                        state.hoverItem = foundHover
-                    } else {
-                        state.hoverItem = null
-                    }
-                },
-                onDragEnd = {
-                    val drag = state.dragItem
-                    val hover = state.hoverItem
-                    if (drag != null && hover != null && drag.weekNumber == hover.weekNumber) {
-                        state.onDrop(drag, hover)
-                    }
-                    state.clear()
-                },
-                onDragCancel = {
-                    state.clear()
                 }
-            )
-        }
+                if (foundHover != null && foundHover.weekNumber == state.dragItem?.weekNumber && foundHover.date != state.dragItem?.date) {
+                    state.hoverItem = foundHover
+                } else {
+                    state.hoverItem = null
+                }
+            },
+            onDragEnd = {
+                val drag = state.dragItem
+                val hover = state.hoverItem
+                if (drag != null && hover != null && drag.weekNumber == hover.weekNumber) {
+                    state.onDrop(drag, hover)
+                }
+                state.clear()
+            },
+            onDragCancel = {
+                state.clear()
+            }
+        )
+    }
 }
 
 @Composable
