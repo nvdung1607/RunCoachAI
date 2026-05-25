@@ -140,6 +140,28 @@ class UserPreferencesRepository(private val context: Context) {
         }
     }
 
+    suspend fun saveAllPreferences(prefs: UserPreferences) {
+        context.dataStore.edit { preferences ->
+            preferences[PreferencesKeys.RACE_DATE] = prefs.raceDate
+            preferences[PreferencesKeys.FITNESS_LEVEL] = prefs.fitnessLevel
+            preferences[PreferencesKeys.VDOT_SCORE] = prefs.vdotScore
+            preferences[PreferencesKeys.HAS_COMPLETED_TEST_RUN] = prefs.hasCompletedTestRun
+            preferences[PreferencesKeys.EASY_PACE_SEC] = prefs.easyPaceSec
+            preferences[PreferencesKeys.TEMPO_PACE_SEC] = prefs.tempoPaceSec
+            preferences[PreferencesKeys.LONG_PACE_SEC] = prefs.longPaceSec
+            preferences[PreferencesKeys.THEME_MODE] = prefs.themeMode
+            preferences[PreferencesKeys.IS_NOTIFICATION_ENABLED] = prefs.isNotificationEnabled
+            preferences[PreferencesKeys.NOTIFICATION_HOUR] = prefs.notificationHour
+            preferences[PreferencesKeys.NOTIFICATION_MINUTE] = prefs.notificationMinute
+            preferences[PreferencesKeys.TARGET_DISTANCE] = prefs.targetDistance
+            preferences[PreferencesKeys.MAX_SESSIONS_PER_WEEK] = prefs.maxSessionsPerWeek
+            preferences[PreferencesKeys.HAS_COMPLETED_PERMISSION_SETUP] = prefs.hasCompletedPermissionSetup
+            preferences[PreferencesKeys.GENDER] = prefs.gender
+            preferences[PreferencesKeys.AGE] = prefs.age
+            preferences[PreferencesKeys.ACTIVITY_LEVEL] = prefs.activityLevel
+        }
+    }
+
     suspend fun clear() {
         context.dataStore.edit { preferences ->
             preferences.clear()

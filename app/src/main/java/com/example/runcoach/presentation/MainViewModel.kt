@@ -830,6 +830,70 @@ class MainViewModel(
         }
     }
 
+    fun exportBackupData(uri: Uri, callback: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val workoutsList = workoutDao.getAllWorkoutsDirect()
+                val prefs = userPreferences.value
+                val backupData = com.example.runcoach.data.local.db.BackupData(
+                    version = 1,
+                    preferences = prefs,
+                    workouts = workoutsList
+                )
+                val gson = com.google.gson.GsonBuilder().setPrettyPrinting().create()
+                val jsonString = gson.toJson(backupData)
+                
+                getApplication<Application>().contentResolver.openOutputStream(uri)?.use { outputStream ->
+                    outputStream.write(jsonString.toByteArray(Charsets.UTF_8))
+                }
+                callback(true, null)
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("Export failed", e)
+                callback(false, e.localizedMessage)
+            }
+        }
+    }
+
+    fun importBackupData(uri: Uri, callback: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val jsonString = getApplication<Application>().contentResolver.openInputStream(uri)?.use { inputStream ->
+                    inputStream.bufferedReader().use { it.readText() }
+                } ?: throw Exception("Cannot open file stream")
+                
+                val gson = com.google.gson.Gson()
+                val backupData = gson.fromJson(jsonString, com.example.runcoach.data.local.db.BackupData::class.java)
+                    ?: throw Exception("Dữ liệu sao lưu trống hoặc không hợp lệ")
+                
+                if (backupData.preferences == null || backupData.workouts == null) {
+                    throw Exception("Cấu trúc file sao lưu không hợp lệ")
+                }
+                
+                // Restore database
+                workoutDao.clearAllWorkouts()
+                workoutDao.insertAll(backupData.workouts)
+                
+                // Restore preferences
+                prefsRepository.saveAllPreferences(backupData.preferences)
+                
+                // Re-register alarms if active
+                if (backupData.preferences.isNotificationEnabled) {
+                    com.example.runcoach.presentation.receiver.WorkoutReminderReceiver.scheduleDailyAlarm(
+                        getApplication(),
+                        backupData.preferences.notificationHour,
+                        backupData.preferences.notificationMinute
+                    )
+                }
+                
+                updateWidget()
+                callback(true, null)
+            } catch (e: Exception) {
+                com.example.runcoach.utils.AppLogger.e("Import failed", e)
+                callback(false, e.localizedMessage)
+            }
+        }
+    }
+
     fun setThemeMode(mode: String) {
         viewModelScope.launch {
             prefsRepository.setThemeMode(mode)

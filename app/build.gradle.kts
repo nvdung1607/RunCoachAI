@@ -13,8 +13,8 @@ android {
         applicationId = "com.example.runcoach"
         minSdk = 26
         targetSdk = 36
-        versionCode = 2
-        versionName = "1.2.0"
+        versionCode = 3
+        versionName = "1.14.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -62,6 +62,9 @@ dependencies {
 
     // Health Connect
     implementation(libs.androidx.health.connect.client)
+
+    // Gson JSON Serialization
+    implementation(libs.gson)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

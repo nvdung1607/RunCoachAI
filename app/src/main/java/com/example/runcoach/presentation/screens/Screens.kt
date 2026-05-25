@@ -976,6 +976,7 @@ fun DashboardScreen(
     onNavigateToHistory: () -> Unit,
     onNavigateToCalendar: () -> Unit
 ) {
+    val context = LocalContext.current
     val userPrefs by viewModel.userPreferences.collectAsState()
     val workoutsList by viewModel.workouts.collectAsState()
     val todayWorkout by viewModel.todayWorkout.collectAsState()
@@ -989,14 +990,41 @@ fun DashboardScreen(
     var showWorkoutDetails by remember { mutableStateOf<WorkoutEntity?>(null) }
     var syncResultMessage by remember { mutableStateOf<String?>(null) }
     var pendingSyncProposal by remember { mutableStateOf<com.example.runcoach.presentation.ProposedSync?>(null) }
+    var showSettingsDialog by remember { mutableStateOf(false) }
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.CreateDocument("application/json")
+    ) { uri ->
+        if (uri != null) {
+            viewModel.exportBackupData(uri) { success, error ->
+                if (success) {
+                    Toast.makeText(context, "💾 Xuất dữ liệu thành công!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "❌ Lỗi xuất dữ liệu: $error", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
+
+    val importLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.OpenDocument()
+    ) { uri ->
+        if (uri != null) {
+            viewModel.importBackupData(uri) { success, error ->
+                if (success) {
+                    Toast.makeText(context, "✅ Nhập dữ liệu thành công!", Toast.LENGTH_SHORT).show()
+                } else {
+                    Toast.makeText(context, "❌ Lỗi nhập dữ liệu: $error", Toast.LENGTH_LONG).show()
+                }
+            }
+        }
+    }
     
     // Dialog states for informational popups
     var showRaceDayInfo by remember { mutableStateOf(false) }
     var showPredictionInfo by remember { mutableStateOf(false) }
     var showPaceZonesInfo by remember { mutableStateOf(false) }
     var showVolumeInfo by remember { mutableStateOf(false) }
-
-    val context = LocalContext.current
 
     val totalDays = try {
         ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.parse(userPrefs.raceDate))
@@ -1133,7 +1161,7 @@ fun DashboardScreen(
                     Spacer(modifier = Modifier.width(14.dp))
                     // Settings / Reset
                     IconButton(
-                        onClick = { showResetConfirm = true },
+                        onClick = { showSettingsDialog = true },
                         modifier = Modifier
                             .size(40.dp)
                             .background(MaterialTheme.colorScheme.surface, RoundedCornerShape(10.dp))
@@ -1879,6 +1907,30 @@ fun DashboardScreen(
                 }
             }
         }
+    }
+
+    // Settings Dialog
+    if (showSettingsDialog) {
+        SettingsDialog(
+            userPrefs = userPrefs,
+            onDismiss = { showSettingsDialog = false },
+            onNotifClick = {
+                showSettingsDialog = false
+                showNotifSettings = true
+            },
+            onExportClick = {
+                showSettingsDialog = false
+                exportLauncher.launch("RunCoach_Backup_${LocalDate.now()}.json")
+            },
+            onImportClick = {
+                showSettingsDialog = false
+                importLauncher.launch(arrayOf("application/json", "*/*"))
+            },
+            onResetClick = {
+                showSettingsDialog = false
+                showResetConfirm = true
+            }
+        )
     }
 
     // Reset confirmation dialog
@@ -3628,6 +3680,138 @@ fun NotificationSettingsDialog(
                     ) { Text("Lưu") }
                 }
             }
+        }
+    }
+}
+
+@Composable
+fun SettingsDialog(
+    userPrefs: UserPreferences,
+    onDismiss: () -> Unit,
+    onNotifClick: () -> Unit,
+    onExportClick: () -> Unit,
+    onImportClick: () -> Unit,
+    onResetClick: () -> Unit
+) {
+    val isDark = isSystemInDarkTheme()
+    Dialog(onDismissRequest = onDismiss) {
+        Card(
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(
+                containerColor = if (isDark) Color(0xFF1E293B) else MaterialTheme.colorScheme.surface
+            ),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Column(
+                modifier = Modifier
+                    .padding(24.dp)
+                    .fillMaxWidth()
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(
+                        imageVector = Icons.Default.Settings,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.primary
+                    )
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text(
+                        text = "Cài đặt & Sao lưu",
+                        fontSize = 18.sp,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                
+                Spacer(modifier = Modifier.height(20.dp))
+                
+                // 1. Notification
+                SettingsItem(
+                    title = "Cài đặt nhắc nhở",
+                    subtitle = "Bật/Tắt và đổi giờ nhắc nhở chạy bộ hàng ngày",
+                    icon = Icons.Default.Notifications,
+                    onClick = onNotifClick
+                )
+                
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                
+                // 2. Export
+                SettingsItem(
+                    title = "Xuất dữ liệu",
+                    subtitle = "Lưu giáo án và tiến trình tập luyện thành file JSON",
+                    icon = Icons.Default.Download,
+                    onClick = onExportClick
+                )
+                
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                
+                // 3. Import
+                SettingsItem(
+                    title = "Nhập dữ liệu",
+                    subtitle = "Khôi phục giáo án và tiến trình từ file JSON đã lưu",
+                    icon = Icons.Default.Upload,
+                    onClick = onImportClick
+                )
+                
+                HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp), color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.08f))
+                
+                // 4. Reset
+                SettingsItem(
+                    title = "Đặt lại ứng dụng",
+                    subtitle = "Xóa toàn bộ giáo án, dữ liệu và thiết lập ban đầu",
+                    icon = Icons.Default.Delete,
+                    iconColor = MaterialTheme.colorScheme.error,
+                    onClick = onResetClick
+                )
+                
+                Spacer(modifier = Modifier.height(16.dp))
+                
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.End
+                ) {
+                    TextButton(onClick = onDismiss) {
+                        Text("Đóng")
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsItem(
+    title: String,
+    subtitle: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    iconColor: Color = MaterialTheme.colorScheme.primary,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Icon(
+            imageVector = icon,
+            contentDescription = null,
+            tint = iconColor,
+            modifier = Modifier.size(24.dp)
+        )
+        Spacer(modifier = Modifier.width(16.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                fontSize = 15.sp,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            Text(
+                text = subtitle,
+                fontSize = 12.sp,
+                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
+            )
         }
     }
 }

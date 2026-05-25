@@ -97,6 +97,7 @@ RunCoach AI là ứng dụng Android thông minh giúp thiết kế và quản l
 
 *   **Phiên bản hiện tại:** v1.14.2
     *   *Nâng cấp v1.14.2:*
+        *   **Sao lưu & Khôi phục thủ công (JSON Backup & Restore):** Hỗ trợ xuất toàn bộ giáo án, lịch sử tập luyện và thiết lập cá nhân ra file JSON, và nhập lại dữ liệu này khi cài lại ứng dụng hoặc cài từ file APK (nơi Google Drive tự động sao lưu không ổn định). Truy cập qua biểu tượng Cài đặt mới trên Dashboard.
         *   **Bảo vệ Ngày Đua (Race Day Protection):** Khóa bài tập ngày đua (`RACE` Run) khỏi toàn bộ hoạt động kéo thả tráo đổi và dời lịch tập để tránh làm xáo trộn điểm mốc quan trọng nhất của toàn bộ giáo án.
         *   **Giao diện Rest Day xám cool-grey cao cấp:** Tái thiết kế trực quan cho các ngày nghỉ phục hồi (`REST` day / không lịch tập) trên trang chủ Dashboard với khung viền màu xám nhạt tinh tế và biểu tượng thư giãn (`😌`) bắt mắt.
         *   **Đồng bộ Widget thời gian thực:** Tích hợp bộ cập nhật widget tức thì (`updateWidget()`) vào tất cả các tác vụ chỉnh sửa, xóa, dời lịch, hoàn thành bài chạy hoặc thay đổi ngày đua, phản hồi ngay lập tức ngoài màn hình chính.
