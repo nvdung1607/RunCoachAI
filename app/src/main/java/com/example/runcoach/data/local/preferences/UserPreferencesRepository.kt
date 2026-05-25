@@ -28,7 +28,8 @@ data class UserPreferences(
     val hasCompletedPermissionSetup: Boolean, // true when permission onboarding screen is completed
     val gender: String = "MALE",       // "MALE", "FEMALE", "OTHER"
     val age: Int = 25,                 // user age
-    val activityLevel: String = "SEDENTARY" // "SEDENTARY", "ACTIVE", "RUNNER"
+    val activityLevel: String = "SEDENTARY", // "SEDENTARY", "ACTIVE", "RUNNER"
+    val isLoaded: Boolean = false       // true when preferences are successfully loaded from disk
 )
 
 class UserPreferencesRepository(private val context: Context) {
@@ -79,7 +80,8 @@ class UserPreferencesRepository(private val context: Context) {
                 hasCompletedPermissionSetup = preferences[PreferencesKeys.HAS_COMPLETED_PERMISSION_SETUP] ?: false,
                 gender = preferences[PreferencesKeys.GENDER] ?: "MALE",
                 age = preferences[PreferencesKeys.AGE] ?: 25,
-                activityLevel = preferences[PreferencesKeys.ACTIVITY_LEVEL] ?: "SEDENTARY"
+                activityLevel = preferences[PreferencesKeys.ACTIVITY_LEVEL] ?: "SEDENTARY",
+                isLoaded = true
             )
         }
 

@@ -58,7 +58,7 @@ class MainViewModel(
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.Eagerly,
-            initialValue = UserPreferences("", "BEGINNER", 0f, false, 480, 420, 510, "SYSTEM", true, 6, 0, 21, 3, false, "MALE", 25, "SEDENTARY")
+            initialValue = UserPreferences("", "BEGINNER", 0f, false, 480, 420, 510, "SYSTEM", true, 6, 0, 21, 3, false, "MALE", 25, "SEDENTARY", false)
         )
 
     val workouts: StateFlow<List<WorkoutEntity>> = workoutDao.getAllWorkoutsFlow()

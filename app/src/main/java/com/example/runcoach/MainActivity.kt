@@ -312,15 +312,15 @@ class MainActivity : ComponentActivity() {
 
                         composable("dashboard") {
                             // Guard: if state was reset, redirect back to onboarding
-                            if (userPrefs.raceDate.isEmpty()) {
+                            if (userPrefs.isLoaded && userPrefs.raceDate.isEmpty()) {
                                 navController.navigate("onboarding") {
                                     popUpTo(0) { inclusive = true }
                                 }
-                            } else if (!userPrefs.hasCompletedTestRun) {
+                            } else if (userPrefs.isLoaded && !userPrefs.hasCompletedTestRun) {
                                 navController.navigate("test_run") {
                                     popUpTo(0) { inclusive = true }
                                 }
-                            } else {
+                            } else if (userPrefs.isLoaded) {
                                 DashboardScreen(
                                     viewModel = viewModel,
                                     onNavigateToPlan = { navController.navigate("plan") },
